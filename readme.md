@@ -15,22 +15,17 @@ This project is a sequential implementation of the RISC-V architecture. The impl
 ## Stages
 
 1. **Instruction Fetch (IF)**
-    - File: `instruction_fetch.v`
-    - Description: This stage is responsible for fetching the instruction from memory using the program counter (PC).
+    - responsible for fetching the instruction from memory using the program counter (PC).
 
 2. **Instruction Decode (ID)**
-    - File: `instruction_decode.v`
-    - Description: This stage decodes the fetched instruction and reads the necessary registers.
+    - decodes the fetched instruction and reads the necessary registers.
 
 3. **Execution (EX)**
-    - File: `execution.v`
-    - Description: This stage performs arithmetic and logical operations based on the decoded instruction.
+    - performs arithmetic and logical operations based on the decoded instruction.
 
 4. **Memory Access (MEM)**
-    - File: `memory_access.v`
-    - Description: This stage handles memory read and write operations.
+    - handles memory read and write operations.
 
 5. **Write Back (WB)**
-    - File: `write_back.v`
-    - Description: This stage writes the result of the execution or memory access back to the register file.
+    - writes the result of the execution or memory access back to the register file.
 
