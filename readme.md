@@ -4,7 +4,7 @@ Contributers :
 
 | Name               | Roll Number |
 | ------------------ | ----------- |
-| Devansh Vershney   | 2023102042  |
+| Devansh Varshney   | 2023102042  |
 | Gopal Kataria      | 2023112006  |
 | Shaikh Haris Jamal | 2023112007  |
 
