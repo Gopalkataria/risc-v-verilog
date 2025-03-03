@@ -421,7 +421,6 @@ module ImmGen (
     end
 endmodule
 
-// Combined Memory module that handles both instruction and data memory
 module Memory (
     input clk,
     input reset,
@@ -430,32 +429,33 @@ module Memory (
     input [31:0] write_data,   // Data to write
     input MemRead,             // Control signal for data read
     input MemWrite,            // Control signal for data write
-    output [31:0] instr,       // Instruction output
-    output [31:0] read_data    // Data output
+    output reg [31:0] instr,   // Instruction output (changed to reg)
+    output reg [31:0] read_data // Data output (changed to reg)
 );
     // Combined memory (64KB total - 16K words)
-    // Lower 32KB for instructions, upper 32KB for data
     reg [31:0] mem [0:16383];  // 16K words of 32 bits each
     
     // Parameters to divide memory spaces
-    parameter INSTR_BASE = 0;      // Instructions start at word address 0
-    parameter DATA_BASE = 8192;    // Data starts at word address 8192 (32KB / 4)
-    
-    // Initialize memory if needed
+    parameter INSTR_BASE = 0;      
+    parameter DATA_BASE = 8192;    
+
+    // Initialize memory
     integer i;
     initial begin
         for (i = 0; i < 16384; i = i + 1)
             mem[i] = 32'h0;
-        // Memory could be initialized with a program here
     end
-    
-    // Instruction read (combinational)
-    // Convert byte address to word address by right shifting by 2
-    assign instr = mem[INSTR_BASE + (instr_addr >> 2)];
-    
-    // Data read (combinational)
-    assign read_data = MemRead ? mem[DATA_BASE + (data_addr >> 2)] : 32'h0;
-    
+
+    // Instruction read (sequential for consistency)
+    always @(*) begin
+        instr = mem[INSTR_BASE + (instr_addr >> 2)];
+    end
+
+    // Data read (sequential for consistency)
+    always @(*) begin
+        read_data = MemRead ? mem[DATA_BASE + (data_addr >> 2)] : 32'h0;
+    end
+
     // Data write (synchronous)
     always @(posedge clk) begin
         if (MemWrite)
@@ -463,34 +463,35 @@ module Memory (
     end
 endmodule
 
-// Fixed Fetch module to use the combined memory
+
 module Fetch (
     input clk,
     input reset,
-    input PCSrc,
-    input [31:0] branch_target,
-    output [31:0] PC,
-    output [31:0] instr,
-    
-    // Interface to memory module
-    output [31:0] instr_addr,
-    input [31:0] instr_data
+    input PCSrc,               // Branch taken signal
+    input [31:0] branch_target, // Branch target address
+    output [31:0] PC,          // Program Counter
+    output [31:0] instr,       // Fetched instruction
+    output [31:0] instr_addr,  // Instruction address (PC)
+    input [31:0] instr_data    // Instruction data from memory
 );
-    reg [31:0] PC_reg;
-    wire [31:0] next_PC;
+    reg [31:0] PC_reg;         // Internal PC register
+    wire [31:0] next_PC;       // Next PC value
 
     // Next PC logic
-    assign next_PC = PCSrc ? branch_target : PC_reg + 4;
+    assign next_PC = PCSrc ? branch_target : (PC_reg + 4);
 
     // Update PC on clock edge
     always @(posedge clk or posedge reset) begin
-        if (reset) PC_reg <= 32'h0;
-        else PC_reg <= next_PC;
+        if (reset)
+            PC_reg <= 32'h0;   // Reset PC to 0
+        else
+            PC_reg <= next_PC; // Update PC to next_PC
     end
 
-    assign PC = PC_reg;
-    assign instr = instr_data;  // Directly assign instruction from memory
-    assign instr_addr = PC_reg; // Pass PC as instruction address
+    // Assign outputs
+    assign PC = PC_reg;        // Output the current PC
+    assign instr = instr_data; // Output the fetched instruction
+    assign instr_addr = PC_reg; // Output the instruction address (PC)
 endmodule
 
 // Fixed Decode module
@@ -610,7 +611,6 @@ module WriteBack (
     assign reg_write_data = MemtoReg ? mem_read_data : ALU_result;
 endmodule
 
-// Fixed top-level RISC-V module with proper connections
 module RISC_V_Single_Cycle (
     input clk,
     input reset
@@ -635,9 +635,8 @@ module RISC_V_Single_Cycle (
     
     // Writeback stage signals
     wire [31:0] reg_write_data;
-    
 
-    
+    // Instantiate Fetch module
     Fetch fetch (
         .clk(clk),
         .reset(reset),
@@ -646,9 +645,10 @@ module RISC_V_Single_Cycle (
         .PC(PC),
         .instr(instr),
         .instr_addr(instr_addr),
-        .instr_data(instr)
+        .instr_data(instr)  // Connect to memory output
     );
-    
+
+    // Instantiate other modules (Decode, Execute, Memory, WriteBack)
     Decode decode (
         .clk(clk),
         .rst(reset),
@@ -667,7 +667,7 @@ module RISC_V_Single_Cycle (
         .AUIPC(AUIPC),
         .funct3(funct3)
     );
-    
+
     Execute execute (
         .PC(PC),
         .read_data1(read_data1),
@@ -690,10 +690,10 @@ module RISC_V_Single_Cycle (
         .write_data(read_data2),
         .MemRead(MemRead),
         .MemWrite(MemWrite),
-        .instr(instr),
+        .instr(instr),  // Connect to Fetch module
         .read_data(mem_read_data)
     );
-    
+
     WriteBack writeback (
         .ALU_result(ALU_result),
         .mem_read_data(mem_read_data),

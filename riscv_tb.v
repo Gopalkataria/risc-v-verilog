@@ -25,7 +25,7 @@ module riscv_tb();
     // Load program into memory
     initial begin
         // Wait for memory initialization
-        #1;
+        #10;
         
         // Load test program into instruction memory
         // Memory addresses are word addresses (4 bytes per word)
@@ -43,10 +43,12 @@ module riscv_tb();
     reg [31:0] prev_pc;
     initial begin
         prev_pc = 32'hx;
+        $dumpfile("riscv_tb.vcd");
+        $dumpvars(0, riscv_tb);
         $display("Time\tPC\t\tInstruction\tx1\tx2\tx3\tx4\tx5\tRegWrite\tMemRead\tMemWrite\tALUSrc\tBranch\tMemtoReg\tJump\tAUIPC\tfunct3\tALU_result\tbranch_taken\tbranch_target");
         forever begin
             @(posedge clk);
-            #1; // Wait for signals to propagate
+            #10; // Wait for signals to propagate
 
             // Display register values and control signals
             $display("%4d\t%h\t%h\t%h\t%h\t%h\t%h\t%h\t%b\t%b\t%b\t%b\t%b\t%b\t%b\t%b\t%b\t%h\t%b\t%h",
