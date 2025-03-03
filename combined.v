@@ -610,94 +610,240 @@ module WriteBack (
 );
     assign reg_write_data = MemtoReg ? mem_read_data : ALU_result;
 endmodule
-
-module RISC_V_Single_Cycle (
+module RISC_V_Multi_Cycle (
     input clk,
     input reset
 );
-    // Fetch stage signals
-    wire [31:0] PC, instr;
-    wire branch_taken;
-    wire [31:0] branch_target;
-    wire [31:0] instr_addr;  // Address for instruction memory
-    
-    // Decode stage signals
-    wire [31:0] read_data1, read_data2, imm;
-    wire RegWrite, MemRead, MemWrite, ALUSrc, Branch, MemtoReg;
-    wire Jump, AUIPC;  // Added control signals
-    wire [2:0] funct3;
-    
-    // Execute stage signals
-    wire [31:0] ALU_result;
-    
-    // Memory stage signals
-    wire [31:0] mem_read_data;
-    
-    // Writeback stage signals
-    wire [31:0] reg_write_data;
+    // State definition
+    reg [3:0] state, next_state;
+    localparam FETCH = 4'b0000,
+               DECODE = 4'b0001,
+               EXECUTE = 4'b0010,
+               MEMORY = 4'b0011,
+               WRITEBACK = 4'b0100,
+               BRANCH_COMPLETION = 4'b0101;
 
-    // Instantiate Fetch module
-    Fetch fetch (
-        .clk(clk),
-        .reset(reset),
-        .PCSrc(branch_taken),
-        .branch_target(branch_target),
-        .PC(PC),
-        .instr(instr),
-        .instr_addr(instr_addr),
-        .instr_data(instr)  // Connect to memory output
+    // Register file
+    reg [31:0] RegisterFile [31:0]; 
+    integer i;
+
+    // Control signals
+    reg PCWrite, IRWrite, RegWrite, ALUSrcA, MemtoReg, IorD;
+    reg [1:0] ALUSrcB, PCSrc;
+    wire MemRead, MemWrite, Branch, Jump, AUIPC;
+
+    // Intermediate registers and wires
+    reg [31:0] PC, IR, A, B, ALUOut, MDR;
+    wire [31:0] imm;
+    wire [31:0] mem_data;
+    wire [31:0] mem_address = IorD ? ALUOut : PC;
+    wire [31:0] alu_a = ALUSrcA ? A : PC;
+    wire [31:0] alu_b;
+    wire [31:0] reg_write_data;
+    wire [31:0] branch_target;
+    wire branch_taken;
+    wire [2:0] funct3;
+
+    // ALU inputs
+    wire [6:0] funct7 = IR[31:25];
+    wire [31:0] read_data1 = A;
+    wire [31:0] read_data2 = B;
+    wire [31:0] ALU_result;
+
+    // Instruction fields
+    wire [6:0] opcode = IR[6:0];
+
+    // Registers for supporting multi-cycle operation
+    reg [31:0] PC_next;
+
+    // Immediate generation
+    ImmGen imm_generator (
+        .instr(IR),
+        .imm(imm)
     );
 
-    // Instantiate other modules (Decode, Execute, Memory, WriteBack)
-    Decode decode (
-        .clk(clk),
-        .rst(reset),
-        .instr(instr),
-        .reg_write_data(reg_write_data),
-        .RegWrite(RegWrite),
-        .read_data1(read_data1),
-        .read_data2(read_data2),
-        .imm(imm),
+    // Control Unit
+    ControlUnit control_unit (
+        .opcode(opcode),
+        .RegWrite(RegWrite_ctrl),
         .MemRead(MemRead),
         .MemWrite(MemWrite),
         .ALUSrc(ALUSrc),
         .Branch(Branch),
-        .MemtoReg(MemtoReg),
+        .MemtoReg(MemtoReg_ctrl),
         .Jump(Jump),
-        .AUIPC(AUIPC),
-        .funct3(funct3)
+        .AUIPC(AUIPC)
     );
 
-    Execute execute (
+    // ALU source B selection
+    assign alu_b = ALUSrcB[1] ? (ALUSrcB[0] ? imm << 2 : imm) : 
+                               (ALUSrcB[0] ? 32'h4 : B);
+
+    // Execute module for ALU operations and branch calculations
+    Execute execute_unit (
         .PC(PC),
         .read_data1(read_data1),
         .read_data2(read_data2),
         .imm(imm),
         .ALUSrc(ALUSrc),
         .Branch(Branch),
-        .funct3(funct3),
-        .funct7(instr[31:25]),  // Pass funct7 from instruction
+        .funct3(IR[14:12]),
+        .funct7(funct7),
         .ALU_result(ALU_result),
         .branch_taken(branch_taken),
         .branch_target(branch_target)
     );
 
-    Memory mem (
+    // Memory access
+    Memory memory (
         .clk(clk),
-        .reset(reset),
-        .instr_addr(instr_addr),
-        .data_addr(ALU_result),
-        .write_data(read_data2),
+        .IorD(IorD),
+        .address(mem_address),
+        .write_data(B),
         .MemRead(MemRead),
         .MemWrite(MemWrite),
-        .instr(instr),  // Connect to Fetch module
-        .read_data(mem_read_data)
+        .read_data(mem_data)
     );
 
+    // Write back
     WriteBack writeback (
-        .ALU_result(ALU_result),
-        .mem_read_data(mem_read_data),
+        .ALU_result(ALUOut),
+        .mem_read_data(MDR),
         .MemtoReg(MemtoReg),
         .reg_write_data(reg_write_data)
     );
+
+    // State machine for control
+    always @(posedge clk or posedge reset) begin
+        if (reset)
+            state <= FETCH;
+        else
+            state <= next_state;
+    end
+
+    // Next state logic
+    always @(*) begin
+        case (state)
+            FETCH:      next_state = DECODE;
+            DECODE:     next_state = EXECUTE;
+            EXECUTE:    begin
+                if (Branch && branch_taken)
+                    next_state = BRANCH_COMPLETION;
+                else if (MemRead || MemWrite)
+                    next_state = MEMORY;
+                else
+                    next_state = WRITEBACK;
+            end
+            MEMORY:     next_state = WRITEBACK;
+            WRITEBACK:  next_state = FETCH;
+            BRANCH_COMPLETION: next_state = FETCH;
+            default:    next_state = FETCH;
+        endcase
+    end
+
+    // Control signals based on current state
+    always @(*) begin
+        // Default control signals
+        PCWrite = 1'b0;
+        IRWrite = 1'b0;
+        RegWrite = 1'b0;
+        ALUSrcA = 1'b0;
+        ALUSrcB = 2'b00;
+        PCSrc = 2'b00;
+        MemtoReg = 1'b0;
+        IorD = 1'b0;
+
+        case (state)
+            FETCH: begin
+                PCWrite = 1'b1;
+                IRWrite = 1'b1;
+                ALUSrcA = 1'b0;    // Use PC
+                ALUSrcB = 2'b01;   // Use 4 (PC+4)
+                PCSrc = 2'b00;     // Select ALU result (PC+4)
+            end
+            
+            DECODE: begin
+                ALUSrcA = 1'b0;    // Use PC
+                ALUSrcB = 2'b10;   // Use immediate
+            end
+            
+            EXECUTE: begin
+                ALUSrcA = 1'b1;    // Use A
+                if (ALUSrc)
+                    ALUSrcB = 2'b10;  // Use immediate
+                else
+                    ALUSrcB = 2'b00;  // Use B
+                
+                if (Jump) begin
+                    PCWrite = 1'b1;
+                    PCSrc = 2'b01;    // Use branch_target
+                end
+            end
+            
+            MEMORY: begin
+                IorD = 1'b1;       // Use ALUOut for address
+            end
+            
+            WRITEBACK: begin
+                RegWrite = 1'b1;
+                MemtoReg = MemtoReg_ctrl;
+            end
+            
+            BRANCH_COMPLETION: begin
+                PCWrite = 1'b1;
+                PCSrc = 2'b01;     // Use branch_target
+            end
+        endcase
+    end
+
+    // PC update
+    always @(posedge clk or posedge reset) begin
+        if (reset) begin
+            PC <= 32'h0;
+        end else if (PCWrite) begin
+            case (PCSrc)
+                2'b00: PC <= PC + 4;                // PC+4
+                2'b01: PC <= branch_target;         // Branch/Jump target
+                2'b10: PC <= ALU_result;            // Direct ALU result (for JALR)
+                default: PC <= PC + 4;
+            endcase
+        end
+    end
+
+    // IR, A, B, ALUOut, and MDR updates
+    always @(posedge clk or posedge reset) begin
+        if (reset) begin
+            IR <= 32'h0;
+            A <= 32'h0;
+            B <= 32'h0;
+            ALUOut <= 32'h0;
+            MDR <= 32'h0;
+            
+            // Initialize register file
+            for (i = 0; i < 32; i = i + 1)
+                RegisterFile[i] <= 32'h0;
+        end else begin
+            // IR update
+            if (IRWrite)
+                IR <= mem_data;
+            
+            // Register values update (during DECODE)
+            if (state == DECODE) begin
+                A <= RegisterFile[IR[19:15]]; // rs1
+                B <= RegisterFile[IR[24:20]]; // rs2
+            end
+            
+            // ALUOut update (during EXECUTE)
+            if (state == EXECUTE)
+                ALUOut <= ALU_result;
+            
+            // MDR update (during MEMORY)
+            if (state == MEMORY && MemRead)
+                MDR <= mem_data;
+            
+            // Register file write (during WRITEBACK)
+            if (RegWrite && (IR[11:7] != 5'b0)) // Don't write to x0
+                RegisterFile[IR[11:7]] <= reg_write_data;
+        end
+    end
 endmodule
