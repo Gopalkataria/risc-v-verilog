@@ -18,19 +18,21 @@ module RISC_V_Single_Cycle_tb();
         forever #5 clk = ~clk;  // 10ns clock period (100MHz)
     end
     
-    // Read program from file and initialize instruction memory
+    // Read program from file and initialize combined memory
     initial begin
         // Read the program from a file
         $readmemh("riscv_program.hex", instruction_memory);
         
-        // Copy to the processor's instruction memory
+        // Copy to the processor's combined memory (instruction section)
+        // Instructions start at index 0 in the combined memory
         for (i = 0; i < 64; i = i + 1) begin
-            uut.fetch.instr_mem[i] = instruction_memory[i];
+            uut.mem.mem[i] = instruction_memory[i];
         end
         
-        // Initialize data memory
+        // Initialize data section of combined memory
+        // Data starts at DATA_BASE (8192)
         for (i = 0; i < 64; i = i + 1) begin
-            uut.memory.data_mem[i] = 32'h0;
+            uut.mem.mem[uut.mem.DATA_BASE + i] = 32'h0;
         end
     end
     
@@ -60,7 +62,7 @@ module RISC_V_Single_Cycle_tb();
         // Write data memory contents
         $fdisplay(file, "\nData Memory Contents (first 16 words):");
         for (i = 0; i < 16; i = i + 1) begin
-            $fdisplay(file, "mem[%0d] = 0x%8h", i, uut.memory.data_mem[i]);
+            $fdisplay(file, "mem[%0d] = 0x%8h", i, uut.mem.mem[uut.mem.DATA_BASE + i]);
         end
         
         // Verification logic
@@ -86,7 +88,7 @@ module RISC_V_Single_Cycle_tb();
     // Monitor important signals to console during simulation
     initial begin
         $monitor("Time=%0t, PC=0x%8h, Instr=0x%8h, RegWrite=%b, ALU_result=0x%8h", 
-                 $time, uut.PC, uut.instr, uut.RegWrite, uut.ALU_result);
+                 $time, uut.fetch.PC, uut.instr, uut.decode.RegWrite, uut.execute.ALU_result);
     end
     
     // Dump waveform file for analysis (if using a simulator that supports it)
