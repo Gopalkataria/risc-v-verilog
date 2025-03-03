@@ -1,0 +1,79 @@
+module riscv_tb();
+
+    reg clk;
+    reg reset;
+    
+    // Instantiate the RISC-V processor
+    RISC_V_Multi_Cycle dut (
+        .clk(clk),
+        .reset(reset)
+    );
+    
+    // Clock generation
+    initial begin
+        clk = 0;
+        forever #5 clk = ~clk;
+    end
+    
+    // Reset generation
+    initial begin
+        reset = 1;
+        #20;
+        reset = 0;
+    end
+    
+    // Load program into memory
+    initial begin
+        // Wait for reset
+        #15;
+        
+        // Load test program into instruction memory
+        // Memory addresses are word addresses (4 bytes per word)
+        dut.memory.mem[0] = 32'h00500093;  // ADDI x1, x0, 5
+        dut.memory.mem[1] = 32'h00300113;  // ADDI x2, x0, 3
+        dut.memory.mem[2] = 32'h002080b3;  // ADD x3, x1, x2
+        dut.memory.mem[3] = 32'h00302023;  // SW x3, 0(x0)
+        dut.memory.mem[4] = 32'h00002203;  // LW x4, 0(x0)
+        dut.memory.mem[5] = 32'h00418863;  // BEQ x3, x4, 8
+        dut.memory.mem[6] = 32'h00100293;  // ADDI x5, x0, 1
+        dut.memory.mem[7] = 32'h0000006f;  // JAL x0, 0 (infinite loop)
+    end
+    
+    // Monitor signals
+    initial begin
+        $dumpfile("riscv_sim.vcd");
+        $dumpvars(0, riscv_tb);
+        
+        $display("Time\tState\tPC\t\tInstruction\tReg1\tReg2\tReg3\tReg4\tReg5");
+        forever begin
+            @(posedge clk);
+            #1; // Wait for signals to propagate
+            $display("%4d\t%d\t%h\t%h\t%d\t%d\t%d\t%d\t%d",
+                $time,
+                dut.state,
+                dut.PC,
+                dut.IR,
+                dut.RegisterFile[1],  // x1
+                dut.RegisterFile[2],  // x2
+                dut.RegisterFile[3],  // x3
+                dut.RegisterFile[4],  // x4
+                dut.RegisterFile[5]   // x5
+            );
+            
+            // Detect halt condition
+            if (dut.state == dut.FETCH && dut.IR == 32'h0000006f && dut.PC == 32'h0000001C) begin
+                $display("\nProgram reached the JAL loop - Simulation halting");
+                #50;  // Let a few more cycles run to see the loop
+                $finish;
+            end
+        end
+    end
+    
+    // Timeout to prevent infinite simulation
+    initial begin
+        #5000;  // 5000 time units
+        $display("\nSimulation timeout - too many cycles");
+        $finish;
+    end
+    
+endmodule

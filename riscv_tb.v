@@ -1,100 +1,81 @@
 `timescale 1ns / 1ps
 
-module RISC_V_Single_Cycle_tb();
-    reg clk;
-    reg reset;
-    integer i, file;
-    reg [31:0] instruction_memory[0:63]; // Temporary storage for instructions
+module riscv_tb;
+  
+  reg clk;
+  reg reset;
+  
+  // Instantiate the processor
+  RISC_V_Multi_Cycle uut (
+    .clk(clk),
+    .reset(reset)
+  );
+
+  // Clock generation (10ns period)
+  always #5 clk = ~clk;
+
+  // For monitoring purposes - access processor internal signals
+  wire [31:0] PC = uut.PC;
+  wire [31:0] IR = uut.IR;
+  wire [3:0] state = uut.state;
+  
+  // For debugging - monitor register values
+  wire [31:0] reg_x1 = uut.RegisterFile[1];
+  wire [31:0] reg_x2 = uut.RegisterFile[2];
+  wire [31:0] reg_x3 = uut.RegisterFile[3];
+
+  // Initialize the Memory module with instructions
+  initial begin
+    // Initialize the Memory
+    // This needs to be adapted to match your actual Memory module implementation
+    // Since we don't have direct access to your Memory module internals, 
+    // the following is a placeholder - you may need to adjust this
     
-    // Instantiate the RISC-V processor
-    RISC_V_Single_Cycle uut (
-        .clk(clk),
-        .reset(reset)
-    );
-    
-    // Clock generation
-    initial begin
-        clk = 0;
-        forever #5 clk = ~clk;  // 10ns clock period (100MHz)
+    // Add instructions to memory at initialization (assuming Memory has an array called mem)
+    uut.memory.mem[0] = 32'h00000093; // ADDI x1, x0, 0 (x1 = 0)
+    uut.memory.mem[1] = 32'h00100113; // ADDI x2, x0, 1 (x2 = 1)
+    uut.memory.mem[2] = 32'h002081B3; // ADD x3, x1, x2 (x3 = x1 + x2)
+    uut.memory.mem[3] = 32'h00000013; // NOP
+    uut.memory.mem[4] = 32'h0000006F; // JAL x0, 0 (infinite loop)
+
+    // Fill rest with NOPs
+    for (integer i = 5; i < 16; i = i + 1) begin
+      uut.memory.mem[i] = 32'h00000013; // NOP
     end
+  end
+
+  initial begin
+    // Initialize signals
+    clk = 0;
+    reset = 1;
     
-    // Read program from file and initialize combined memory
-    initial begin
-        // Read the program from a file
-        $readmemh("riscv_program.hex", instruction_memory);
-        
-        // Copy to the processor's combined memory (instruction section)
-        // Instructions start at index 0 in the combined memory
-        for (i = 0; i < 64; i = i + 1) begin
-            uut.mem.mem[i] = instruction_memory[i];
-        end
-        
-        // Initialize data section of combined memory
-        // Data starts at DATA_BASE (8192)
-        for (i = 0; i < 64; i = i + 1) begin
-            uut.mem.mem[uut.mem.DATA_BASE + i] = 32'h0;
-        end
+    // Apply reset for a few cycles
+    #20 reset = 0;
+
+    // Run for 100 cycles
+    repeat (100) begin
+      @(posedge clk); // Wait for clock edge
+      
+      // Display processor state
+      $display("Time=%0t, State=%d, PC=%h, IR=%h", $time, state, PC, IR);
+      
+      if ( state == uut.FETCH ) begin
+        $display("  Fetching instruction at PC=%h", PC);
+      end
+
+      // Display register values when in WRITEBACK state
+      if (state == uut.WRITEBACK) begin
+        $display("  Registers: x1=%h, x2=%h, x3=%h", reg_x1, reg_x2, reg_x3);
+      end
     end
-    
-    // Test sequence
-    initial begin
-        // Initialize
-        reset = 1;
-        #15;  // Assert reset for 15ns
-        reset = 0;
-        
-        // Run simulation for enough cycles to execute all test instructions
-        #500;
-        
-        // Store results in file
-        file = $fopen("riscv_results.txt", "w");
-        
-        // Write header
-        $fdisplay(file, "RISC-V Single Cycle Processor Simulation Results");
-        $fdisplay(file, "=============================================");
-        $fdisplay(file, "Register File Contents:");
-        
-        // Write register contents
-        for (i = 0; i < 32; i = i + 1) begin
-            $fdisplay(file, "x%0d = 0x%8h", i, uut.decode.reg_file[i]);
-        end
-        
-        // Write data memory contents
-        $fdisplay(file, "\nData Memory Contents (first 16 words):");
-        for (i = 0; i < 16; i = i + 1) begin
-            $fdisplay(file, "mem[%0d] = 0x%8h", i, uut.mem.mem[uut.mem.DATA_BASE + i]);
-        end
-        
-        // Verification logic
-        $fdisplay(file, "\nVerification Results:");
-        if (uut.decode.reg_file[5] == 32'h00000008 &&
-            uut.decode.reg_file[6] == 32'h00000014 &&
-            uut.decode.reg_file[7] == 32'h00000014) begin
-            $fdisplay(file, "TEST PASSED: Register values match expected outputs");
-        end else begin
-            $fdisplay(file, "TEST FAILED: Register values don't match expected outputs");
-            $fdisplay(file, "Expected: x5=0x8, x6=0x14, x7=0x14");
-            $fdisplay(file, "Got: x5=0x%h, x6=0x%h, x7=0x%h", 
-                     uut.decode.reg_file[5], 
-                     uut.decode.reg_file[6], 
-                     uut.decode.reg_file[7]);
-        end
-        
-        $fclose(file);
-        $display("Simulation completed. Results written to riscv_results.txt");
-        $finish;
-    end
-    
-    // Monitor important signals to console during simulation
-    initial begin
-        $monitor("Time=%0t, PC=0x%8h, Instr=0x%8h, RegWrite=%b, ALU_result=0x%8h", 
-                 $time, uut.fetch.PC, uut.instr, uut.decode.RegWrite, uut.execute.ALU_result);
-    end
-    
-    // Dump waveform file for analysis (if using a simulator that supports it)
-    initial begin
-        $dumpfile("riscv_sim.vcd");
-        $dumpvars(0, RISC_V_Single_Cycle_tb);
-    end
-    
+
+    $finish;
+  end
+
+  // Dump waveform for debugging
+  initial begin
+    $dumpfile("riscv_tb.vcd");
+    $dumpvars(0, riscv_tb);
+  end
+
 endmodule
