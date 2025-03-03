@@ -421,6 +421,7 @@ module ImmGen (
     end
 endmodule
 
+// / Fixed Memory module
 module Memory (
     input clk,
     input reset,
@@ -429,8 +430,8 @@ module Memory (
     input [31:0] write_data,   // Data to write
     input MemRead,             // Control signal for data read
     input MemWrite,            // Control signal for data write
-    output reg [31:0] instr,   // Instruction output (changed to reg)
-    output reg [31:0] read_data // Data output (changed to reg)
+    output reg [31:0] instr,   // Instruction output
+    output reg [31:0] read_data // Data output
 );
     // Combined memory (64KB total - 16K words)
     reg [31:0] mem [0:16383];  // 16K words of 32 bits each
@@ -442,59 +443,49 @@ module Memory (
     // Initialize memory
     integer i;
     initial begin
+        // Initialize all memory to zero
         for (i = 0; i < 16384; i = i + 1)
             mem[i] = 32'h0;
+            
+        // Initialize with a simple test program at instruction memory
+        mem[0] = 32'h00000093; // ADDI x1, x0, 0 (x1 = 0)
+        mem[1] = 32'h00100113; // ADDI x2, x0, 1 (x2 = 1)
+        mem[2] = 32'h002081B3; // ADD x3, x1, x2 (x3 = x1 + x2)
+        mem[3] = 32'h00000013; // NOP
+        mem[4] = 32'h0000006F; // JAL x0, 0 (infinite loop)
     end
 
-    // Instruction read (sequential for consistency)
+    // Handle reset
+    always @(posedge reset) begin
+        if (reset) begin
+            // Reset output registers
+            instr <= 32'h0;
+            read_data <= 32'h0;
+        end
+    end
+
+    // Instruction read - word-aligned addresses
     always @(*) begin
-        instr = mem[INSTR_BASE + (instr_addr >> 2)];
+        // Extract word address by shifting right by 2 bits (dividing by 4)
+        // Add to instruction base address
+        instr = (reset) ? 32'h0 : mem[INSTR_BASE + (instr_addr[13:2])];
     end
 
-    // Data read (sequential for consistency)
+    // Data read - word-aligned addresses
     always @(*) begin
-        read_data = MemRead ? mem[DATA_BASE + (data_addr >> 2)] : 32'h0;
+        if (reset || !MemRead)
+            read_data = 32'h0;
+        else
+            read_data = mem[DATA_BASE + (data_addr[13:2])];
     end
 
-    // Data write (synchronous)
+    // Data write - word-aligned addresses
     always @(posedge clk) begin
-        if (MemWrite)
-            mem[DATA_BASE + (data_addr >> 2)] <= write_data;
+        if (!reset && MemWrite)
+            mem[DATA_BASE + (data_addr[13:2])] <= write_data;
     end
 endmodule
 
-
-// module Fetch (
-//     input clk,
-//     input reset,
-//     input PCSrc,               // Branch taken signal
-//     input [31:0] branch_target, // Branch target address
-//     output reg [31:0] PC,       // Program Counter
-//     output reg [31:0] instr,    // Fetched instruction
-//     output [31:0] instr_addr,   // Instruction address (PC)
-//     input [31:0] instr_data     // Instruction data from memory
-// );
-//     reg [31:0] next_PC; // Register for next PC value
-
-//     always @(*) begin
-//         if (PCSrc)
-//             next_PC = branch_target & 32'hFFFFFFFC; // Align to 4-byte boundary
-//         else
-//             next_PC = PC + 4;
-//     end
-
-//     always @(posedge clk or posedge reset) begin
-//         if (reset) begin
-//             PC <= 32'h0;   // Reset PC to 0
-//         end else begin
-//             PC <= next_PC; // Correctly update PC
-//         end
-//     end
-
-//     // Assign outputs
-//     assign instr_addr = PC;  // Instruction Address
-//     always @(posedge clk) instr <= instr_data;  // Register instruction data for stability
-// endmodule
 
 // Fixed Decode module
 module Decode (
@@ -613,6 +604,22 @@ module WriteBack (
     assign reg_write_data = MemtoReg ? mem_read_data : ALU_result;
 endmodule
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// top level risc v module 
+// Corrected memory-related parts of RISC_V_Multi_Cycle module
 module RISC_V_Multi_Cycle (
     input clk,
     input reset
@@ -639,7 +646,8 @@ module RISC_V_Multi_Cycle (
     // Intermediate registers and wires
     reg [31:0] PC, IR, A, B, ALUOut, MDR;
     wire [31:0] imm;
-    wire [31:0] mem_data;
+    wire [31:0] instr_data;     // For instruction fetch
+    wire [31:0] read_data;      // For data memory read
     wire [31:0] mem_address = IorD ? ALUOut : PC;
     wire [31:0] alu_a = ALUSrcA ? A : PC;
     wire [31:0] alu_b;
@@ -647,7 +655,6 @@ module RISC_V_Multi_Cycle (
     wire [31:0] branch_target;
     wire branch_taken;
     wire [31:0] next_PC;
-    wire [31:0] instruction;
 
     // ALU inputs
     wire [6:0] funct7 = IR[31:25];
@@ -696,8 +703,8 @@ module RISC_V_Multi_Cycle (
         .branch_target(branch_target)
     );
 
-    // Memory access
-     Memory memory (
+    // Memory access - corrected port connections
+    Memory memory (
         .clk(clk),
         .reset(reset),
         .instr_addr(PC),            // Address for instruction fetch
@@ -836,7 +843,7 @@ module RISC_V_Multi_Cycle (
         end else begin
             // IR update
             if (IRWrite)
-                IR <= mem_data;
+                IR <= instr_data;  // Use instr_data from memory module
             
             // Register values update (during DECODE)
             if (state == DECODE) begin
@@ -850,7 +857,7 @@ module RISC_V_Multi_Cycle (
             
             // MDR update (during MEMORY)
             if (state == MEMORY && MemRead)
-                MDR <= mem_data;
+                MDR <= read_data;  // Use read_data from memory module
             
             // Register file write (during WRITEBACK)
             if (RegWrite && (IR[11:7] != 5'b0)) // Don't write to x0
