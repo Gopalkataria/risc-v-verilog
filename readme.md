@@ -8,6 +8,19 @@ Contributers :
 | Gopal Kataria      | 2023112006  |
 | Shaikh Haris Jamal | 2023112007  |
 
+# Compiling instructions 
+To compile the project, use the following commands:
+
+```sh
+iverilog -o RISCV ./riscv_tb.b ./Sequential/*.v
+```
+
+To run the compiled simulation, use:
+```sh
+vvp ./RISCV
+```
+
+
 # RISC-V Sequential Implementation
 
 This project is a sequential implementation of the RISC-V architecture. The implementation is divided into five stages, each represented by its respective file.
