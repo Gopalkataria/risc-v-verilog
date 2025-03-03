@@ -1,101 +1,81 @@
-module riscv_tb();
+`timescale 1ns / 1ps
 
-    reg clk;
-    reg reset;
-    
-    // Instantiate the RISC-V processor
-    RISC_V_Single_Cycle dut (
-        .clk(clk),
-        .reset(reset)
-    );
-    
-    // Clock generation
-    initial begin
-        clk = 0;
-        forever #5 clk = ~clk;
-    end
-    
-    // Reset generation
-    initial begin
-        reset = 1;
-        #10;
-        reset = 0;
-    end
-    
-    // Load program into memory
-    initial begin
-        // Wait for memory initialization
-        #10;
-        
-        // Load test program into instruction memory
-        // Memory addresses are word addresses (4 bytes per word)
-        dut.mem.mem[0] = 32'h00500093;  // ADDI x1, x0, 5
-        dut.mem.mem[1] = 32'h00300113;  // ADDI x2, x0, 3
-        dut.mem.mem[2] = 32'h002080b3;  // ADD x3, x1, x2
-        dut.mem.mem[3] = 32'h00302023;  // SW x3, 0(x0)
-        dut.mem.mem[4] = 32'h00002203;  // LW x4, 0(x0)
-        dut.mem.mem[5] = 32'h00418863;  // BEQ x3, x4, 8
-        dut.mem.mem[6] = 32'h00100293;  // ADDI x5, x0, 1
-        dut.mem.mem[7] = 32'h0000006f;  // JAL x0, 0x1c (infinite loop)
-    end
-    
-    // Monitor signals
-    reg [31:0] prev_pc;
-    initial begin
-        prev_pc = 32'hx;
-        $dumpfile("riscv_tb.vcd");
-        $dumpvars(0, riscv_tb);
-        $display("Time\tPC\t\tInstruction\tx1\tx2\tx3\tx4\tx5\tRegWrite\tMemRead\tMemWrite\tALUSrc\tBranch\tMemtoReg\tJump\tAUIPC\tfunct3\tALU_result\tbranch_taken\tbranch_target");
-        forever begin
-            @(posedge clk);
-            #10; // Wait for signals to propagate
+module riscv_tb;
+  
+  reg clk;
+  reg reset;
+  
+  // Instantiate the processor
+  RISC_V_Multi_Cycle uut (
+    .clk(clk),
+    .reset(reset)
+  );
 
-            // Display register values and control signals
-            $display("%4d\t%h\t%h\t%h\t%h\t%h\t%h\t%h\t%b\t%b\t%b\t%b\t%b\t%b\t%b\t%b\t%b\t%h\t%b\t%h",
-                $time,
-                dut.fetch.PC,
-                dut.fetch.instr,
-                dut.decode.reg_file[1],
-                dut.decode.reg_file[2],
-                dut.decode.reg_file[3],
-                dut.decode.reg_file[4],
-                dut.decode.reg_file[5],
-                dut.decode.RegWrite,
-                dut.decode.MemRead,
-                dut.decode.MemWrite,
-                dut.decode.ALUSrc,
-                dut.decode.Branch,
-                dut.decode.MemtoReg,
-                dut.decode.Jump,
-                dut.decode.AUIPC,
-                dut.decode.funct3,
-                dut.execute.ALU_result,
-                dut.execute.branch_taken,
-                dut.execute.branch_target);
+  // Clock generation (10ns period)
+  always #5 clk = ~clk;
 
-            // Check for halt condition
-            if (prev_pc === dut.fetch.PC) begin
-                $display("\nHALT detected at PC %h", dut.fetch.PC);
-                $display("Final register values:");
-                $display("x1: %h (5 expected)", dut.decode.reg_file[1]);
-                $display("x2: %h (3 expected)", dut.decode.reg_file[2]);
-                $display("x3: %h (8 expected)", dut.decode.reg_file[3]);
-                $display("x4: %h (8 expected)", dut.decode.reg_file[4]);
-                $display("x5: %h (1 not expected - branch should skip)", 
-                    dut.decode.reg_file[5]);
-                $finish;
-            end
-            prev_pc = dut.fetch.PC;
-        end
-    end
+  // For monitoring purposes - access processor internal signals
+  wire [31:0] PC = uut.PC;
+  wire [31:0] IR = uut.IR;
+  wire [3:0] state = uut.state;
+  
+  // For debugging - monitor register values
+  wire [31:0] reg_x1 = uut.RegisterFile[1];
+  wire [31:0] reg_x2 = uut.RegisterFile[2];
+  wire [31:0] reg_x3 = uut.RegisterFile[3];
+
+  // Initialize the Memory module with instructions
+  initial begin
+    // Initialize the Memory
+    // This needs to be adapted to match your actual Memory module implementation
+    // Since we don't have direct access to your Memory module internals, 
+    // the following is a placeholder - you may need to adjust this
     
-    // Data memory monitoring
-    always @(posedge clk) begin
-        if (dut.mem.MemWrite) begin
-            $display("Memory Write: Address %h, Data %h", 
-                dut.execute.ALU_result,
-                dut.decode.read_data2);
-        end
+    // Add instructions to memory at initialization (assuming Memory has an array called mem)
+    uut.memory.mem[0] = 32'h00000093; // ADDI x1, x0, 0 (x1 = 0)
+    uut.memory.mem[1] = 32'h00100113; // ADDI x2, x0, 1 (x2 = 1)
+    uut.memory.mem[2] = 32'h002081B3; // ADD x3, x1, x2 (x3 = x1 + x2)
+    uut.memory.mem[3] = 32'h00000013; // NOP
+    uut.memory.mem[4] = 32'h0000006F; // JAL x0, 0 (infinite loop)
+
+    // Fill rest with NOPs
+    for (integer i = 5; i < 16; i = i + 1) begin
+      uut.memory.mem[i] = 32'h00000013; // NOP
     end
+  end
+
+  initial begin
+    // Initialize signals
+    clk = 0;
+    reset = 1;
+    
+    // Apply reset for a few cycles
+    #20 reset = 0;
+
+    // Run for 100 cycles
+    repeat (100) begin
+      @(posedge clk); // Wait for clock edge
+      
+      // Display processor state
+      $display("Time=%0t, State=%d, PC=%h, IR=%h", $time, state, PC, IR);
+      
+      if ( state == uut.FETCH ) begin
+        $display("  Fetching instruction at PC=%h", PC);
+      end
+
+      // Display register values when in WRITEBACK state
+      if (state == uut.WRITEBACK) begin
+        $display("  Registers: x1=%h, x2=%h, x3=%h", reg_x1, reg_x2, reg_x3);
+      end
+    end
+
+    $finish;
+  end
+
+  // Dump waveform for debugging
+  initial begin
+    $dumpfile("riscv_tb.vcd");
+    $dumpvars(0, riscv_tb);
+  end
 
 endmodule

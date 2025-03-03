@@ -464,35 +464,37 @@ module Memory (
 endmodule
 
 
-module Fetch (
-    input clk,
-    input reset,
-    input PCSrc,               // Branch taken signal
-    input [31:0] branch_target, // Branch target address
-    output [31:0] PC,          // Program Counter
-    output [31:0] instr,       // Fetched instruction
-    output [31:0] instr_addr,  // Instruction address (PC)
-    input [31:0] instr_data    // Instruction data from memory
-);
-    reg [31:0] PC_reg;         // Internal PC register
-    wire [31:0] next_PC;       // Next PC value
+// module Fetch (
+//     input clk,
+//     input reset,
+//     input PCSrc,               // Branch taken signal
+//     input [31:0] branch_target, // Branch target address
+//     output reg [31:0] PC,       // Program Counter
+//     output reg [31:0] instr,    // Fetched instruction
+//     output [31:0] instr_addr,   // Instruction address (PC)
+//     input [31:0] instr_data     // Instruction data from memory
+// );
+//     reg [31:0] next_PC; // Register for next PC value
 
-    // Next PC logic
-    assign next_PC = PCSrc ? branch_target : (PC_reg + 4);
+//     always @(*) begin
+//         if (PCSrc)
+//             next_PC = branch_target & 32'hFFFFFFFC; // Align to 4-byte boundary
+//         else
+//             next_PC = PC + 4;
+//     end
 
-    // Update PC on clock edge
-    always @(posedge clk or posedge reset) begin
-        if (reset)
-            PC_reg <= 32'h0;   // Reset PC to 0
-        else
-            PC_reg <= next_PC; // Update PC to next_PC
-    end
+//     always @(posedge clk or posedge reset) begin
+//         if (reset) begin
+//             PC <= 32'h0;   // Reset PC to 0
+//         end else begin
+//             PC <= next_PC; // Correctly update PC
+//         end
+//     end
 
-    // Assign outputs
-    assign PC = PC_reg;        // Output the current PC
-    assign instr = instr_data; // Output the fetched instruction
-    assign instr_addr = PC_reg; // Output the instruction address (PC)
-endmodule
+//     // Assign outputs
+//     assign instr_addr = PC;  // Instruction Address
+//     always @(posedge clk) instr <= instr_data;  // Register instruction data for stability
+// endmodule
 
 // Fixed Decode module
 module Decode (
@@ -610,6 +612,7 @@ module WriteBack (
 );
     assign reg_write_data = MemtoReg ? mem_read_data : ALU_result;
 endmodule
+
 module RISC_V_Multi_Cycle (
     input clk,
     input reset
@@ -630,7 +633,8 @@ module RISC_V_Multi_Cycle (
     // Control signals
     reg PCWrite, IRWrite, RegWrite, ALUSrcA, MemtoReg, IorD;
     reg [1:0] ALUSrcB, PCSrc;
-    wire MemRead, MemWrite, Branch, Jump, AUIPC;
+    wire MemRead, MemWrite, Branch, Jump, AUIPC, ALUSrc;
+    wire RegWrite_ctrl, MemtoReg_ctrl;
 
     // Intermediate registers and wires
     reg [31:0] PC, IR, A, B, ALUOut, MDR;
@@ -642,7 +646,8 @@ module RISC_V_Multi_Cycle (
     wire [31:0] reg_write_data;
     wire [31:0] branch_target;
     wire branch_taken;
-    wire [2:0] funct3;
+    wire [31:0] next_PC;
+    wire [31:0] instruction;
 
     // ALU inputs
     wire [6:0] funct7 = IR[31:25];
@@ -652,9 +657,6 @@ module RISC_V_Multi_Cycle (
 
     // Instruction fields
     wire [6:0] opcode = IR[6:0];
-
-    // Registers for supporting multi-cycle operation
-    reg [31:0] PC_next;
 
     // Immediate generation
     ImmGen imm_generator (
@@ -695,14 +697,16 @@ module RISC_V_Multi_Cycle (
     );
 
     // Memory access
-    Memory memory (
+     Memory memory (
         .clk(clk),
-        .IorD(IorD),
-        .address(mem_address),
-        .write_data(B),
-        .MemRead(MemRead),
-        .MemWrite(MemWrite),
-        .read_data(mem_data)
+        .reset(reset),
+        .instr_addr(PC),            // Address for instruction fetch
+        .data_addr(ALUOut),         // Address for data access
+        .write_data(B),             // Data to write
+        .MemRead(MemRead),          // Control signal for data read
+        .MemWrite(MemWrite),        // Control signal for data write
+        .instr(instr_data),         // Instruction output
+        .read_data(read_data)       // Data output
     );
 
     // Write back
@@ -711,6 +715,18 @@ module RISC_V_Multi_Cycle (
         .mem_read_data(MDR),
         .MemtoReg(MemtoReg),
         .reg_write_data(reg_write_data)
+    );
+
+    // Fetch module for instruction fetch
+    Fetch fetch_unit (
+        .clk(clk),
+        .reset(reset),
+        .PCWrite(PCWrite),
+        .PCSrc(PCSrc),
+        .branch_target(branch_target),
+        .alu_result(ALU_result),
+        .next_PC(next_PC),
+        .current_PC(PC)
     );
 
     // State machine for control
@@ -796,17 +812,12 @@ module RISC_V_Multi_Cycle (
         endcase
     end
 
-    // PC update
+    // PC update - now delegated to Fetch module
     always @(posedge clk or posedge reset) begin
         if (reset) begin
             PC <= 32'h0;
         end else if (PCWrite) begin
-            case (PCSrc)
-                2'b00: PC <= PC + 4;                // PC+4
-                2'b01: PC <= branch_target;         // Branch/Jump target
-                2'b10: PC <= ALU_result;            // Direct ALU result (for JALR)
-                default: PC <= PC + 4;
-            endcase
+            PC <= next_PC;
         end
     end
 
@@ -845,5 +856,27 @@ module RISC_V_Multi_Cycle (
             if (RegWrite && (IR[11:7] != 5'b0)) // Don't write to x0
                 RegisterFile[IR[11:7]] <= reg_write_data;
         end
+    end
+endmodule
+
+// Modified Fetch module
+module Fetch (
+    input clk,
+    input reset,
+    input PCWrite,
+    input [1:0] PCSrc,
+    input [31:0] branch_target,
+    input [31:0] alu_result,
+    output reg [31:0] next_PC,
+    input [31:0] current_PC
+);
+    // PC update logic based on control signals
+    always @(*) begin
+        case (PCSrc)
+            2'b00: next_PC = current_PC + 4;        // PC+4
+            2'b01: next_PC = branch_target;         // Branch/Jump target
+            2'b10: next_PC = alu_result;            // Direct ALU result (for JALR)
+            default: next_PC = current_PC + 4;
+        endcase
     end
 endmodule
