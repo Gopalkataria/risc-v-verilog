@@ -446,13 +446,6 @@ module Memory (
         // Initialize all memory to zero
         for (i = 0; i < 16384; i = i + 1)
             mem[i] = 32'h0;
-            
-        // Initialize with a simple test program at instruction memory
-        mem[0] = 32'h00000093; // ADDI x1, x0, 0 (x1 = 0)
-        mem[1] = 32'h00100113; // ADDI x2, x0, 1 (x2 = 1)
-        mem[2] = 32'h002081B3; // ADD x3, x1, x2 (x3 = x1 + x2)
-        mem[3] = 32'h00000013; // NOP
-        mem[4] = 32'h0000006F; // JAL x0, 0 (infinite loop)
     end
 
     // Handle reset
