@@ -42,6 +42,10 @@ module riscv_tb;
       if (state == uut.WRITEBACK) begin
         $display("  Registers: x1=%h, x2=%h, x3=%h", reg_x1, reg_x2, reg_x3);
       end
+      if (state == uut.BRANCH_COMPLETION) begin
+        $display("  Branch Taken to PC=%h", uut.PCSrc);
+      end
+    
     end
     $finish;
   end
