@@ -303,10 +303,11 @@ module alu_64bit(
     end
 endmodule
 
+//------------------------------------
+
 // Control Unit module - fixed to ensure all outputs are assigned
 module ControlUnit (
     input [6:0] opcode,
-    output reg [2:0] ALUOp,
     output reg RegWrite,
     output reg MemRead,
     output reg MemWrite,
@@ -318,7 +319,6 @@ module ControlUnit (
 );
     always @(*) begin
         // Default values
-        ALUOp = 3'b000;
         RegWrite = 1'b0;
         MemRead = 1'b0;
         MemWrite = 1'b0;
@@ -331,20 +331,17 @@ module ControlUnit (
         case (opcode)
             // R-type (ADD, SUB, AND, OR, etc.)
             7'b0110011: begin
-                ALUOp = 3'b010;  // R-type ALUOp
                 RegWrite = 1'b1;
             end
 
             // I-type (ADDI, ORI, ANDI, etc.)
             7'b0010011: begin
-                ALUOp = 3'b011;  // I-type ALUOp
                 RegWrite = 1'b1;
                 ALUSrc = 1'b1;  // Use immediate
             end
 
             // Load (LW)
             7'b0000011: begin
-                ALUOp = 3'b000;  // ADD for address
                 RegWrite = 1'b1;
                 ALUSrc = 1'b1;
                 MemRead = 1'b1;
@@ -353,14 +350,12 @@ module ControlUnit (
 
             // Store (SW)
             7'b0100011: begin
-                ALUOp = 3'b000;  // ADD for address
                 ALUSrc = 1'b1;
                 MemWrite = 1'b1;
             end
 
             // Branch (BEQ, BNE, etc.)
             7'b1100011: begin
-                ALUOp = 3'b001;  // SUB for comparison
                 Branch = 1'b1;
             end
 
@@ -380,7 +375,6 @@ module ControlUnit (
 
             // LUI (Load Upper Immediate)
             7'b0110111: begin
-                ALUOp = 3'b100;  // LUI operation
                 RegWrite = 1'b1;
                 ALUSrc = 1'b1;
             end
@@ -495,8 +489,8 @@ module Fetch (
     end
 
     assign PC = PC_reg;
-    assign instr = instr_data;
-    assign instr_addr = PC_reg;
+    assign instr = instr_data;  // Directly assign instruction from memory
+    assign instr_addr = PC_reg; // Pass PC as instruction address
 endmodule
 
 // Fixed Decode module
@@ -509,7 +503,6 @@ module Decode (
     output [31:0] read_data1,
     output [31:0] read_data2,
     output [31:0] imm,
-    output [2:0] ALUOp,
     output MemRead,
     output MemWrite,
     output ALUSrc,
@@ -527,7 +520,6 @@ module Decode (
     
     ControlUnit ctrl (
         .opcode(opcode),
-        .ALUOp(ALUOp),
         .RegWrite(RegWrite),
         .MemRead(MemRead),
         .MemWrite(MemWrite),
@@ -568,7 +560,6 @@ module Execute (
     input [31:0] read_data1,
     input [31:0] read_data2,
     input [31:0] imm,
-    input [2:0] ALUOp,
     input ALUSrc,
     input Branch,
     input [2:0] funct3,
@@ -632,7 +623,6 @@ module RISC_V_Single_Cycle (
     
     // Decode stage signals
     wire [31:0] read_data1, read_data2, imm;
-    wire [2:0] ALUOp;
     wire RegWrite, MemRead, MemWrite, ALUSrc, Branch, MemtoReg;
     wire Jump, AUIPC;  // Added control signals
     wire [2:0] funct3;
@@ -646,18 +636,7 @@ module RISC_V_Single_Cycle (
     // Writeback stage signals
     wire [31:0] reg_write_data;
     
-    // Combined memory instance
-    Memory mem (
-        .clk(clk),
-        .reset(reset),
-        .instr_addr(instr_addr),
-        .data_addr(ALU_result),
-        .write_data(read_data2),
-        .MemRead(MemRead),
-        .MemWrite(MemWrite),
-        .instr(instr),
-        .read_data(mem_read_data)
-    );
+
     
     Fetch fetch (
         .clk(clk),
@@ -679,7 +658,6 @@ module RISC_V_Single_Cycle (
         .read_data1(read_data1),
         .read_data2(read_data2),
         .imm(imm),
-        .ALUOp(ALUOp),
         .MemRead(MemRead),
         .MemWrite(MemWrite),
         .ALUSrc(ALUSrc),
@@ -695,7 +673,6 @@ module RISC_V_Single_Cycle (
         .read_data1(read_data1),
         .read_data2(read_data2),
         .imm(imm),
-        .ALUOp(ALUOp),
         .ALUSrc(ALUSrc),
         .Branch(Branch),
         .funct3(funct3),
@@ -703,6 +680,18 @@ module RISC_V_Single_Cycle (
         .ALU_result(ALU_result),
         .branch_taken(branch_taken),
         .branch_target(branch_target)
+    );
+
+    Memory mem (
+        .clk(clk),
+        .reset(reset),
+        .instr_addr(instr_addr),
+        .data_addr(ALU_result),
+        .write_data(read_data2),
+        .MemRead(MemRead),
+        .MemWrite(MemWrite),
+        .instr(instr),
+        .read_data(mem_read_data)
     );
     
     WriteBack writeback (

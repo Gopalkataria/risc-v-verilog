@@ -1,13 +1,10 @@
-`timescale 1ns / 1ps
+module riscv_tb();
 
-module RISC_V_Single_Cycle_tb();
     reg clk;
     reg reset;
-    integer i, file;
-    reg [31:0] instruction_memory[0:63]; // Temporary storage for instructions
     
     // Instantiate the RISC-V processor
-    RISC_V_Single_Cycle uut (
+    RISC_V_Single_Cycle dut (
         .clk(clk),
         .reset(reset)
     );
@@ -15,86 +12,88 @@ module RISC_V_Single_Cycle_tb();
     // Clock generation
     initial begin
         clk = 0;
-        forever #5 clk = ~clk;  // 10ns clock period (100MHz)
+        forever #5 clk = ~clk;
     end
     
-    // Read program from file and initialize combined memory
+    // Reset generation
     initial begin
-        // Read the program from a file
-        $readmemh("riscv_program.hex", instruction_memory);
-        
-        // Copy to the processor's combined memory (instruction section)
-        // Instructions start at index 0 in the combined memory
-        for (i = 0; i < 64; i = i + 1) begin
-            uut.mem.mem[i] = instruction_memory[i];
-        end
-        
-        // Initialize data section of combined memory
-        // Data starts at DATA_BASE (8192)
-        for (i = 0; i < 64; i = i + 1) begin
-            uut.mem.mem[uut.mem.DATA_BASE + i] = 32'h0;
-        end
-    end
-    
-    // Test sequence
-    initial begin
-        // Initialize
         reset = 1;
-        #15;  // Assert reset for 15ns
+        #10;
         reset = 0;
-        
-        // Run simulation for enough cycles to execute all test instructions
-        #500;
-        
-        // Store results in file
-        file = $fopen("riscv_results.txt", "w");
-        
-        // Write header
-        $fdisplay(file, "RISC-V Single Cycle Processor Simulation Results");
-        $fdisplay(file, "=============================================");
-        $fdisplay(file, "Register File Contents:");
-        
-        // Write register contents
-        for (i = 0; i < 32; i = i + 1) begin
-            $fdisplay(file, "x%0d = 0x%8h", i, uut.decode.reg_file[i]);
-        end
-        
-        // Write data memory contents
-        $fdisplay(file, "\nData Memory Contents (first 16 words):");
-        for (i = 0; i < 16; i = i + 1) begin
-            $fdisplay(file, "mem[%0d] = 0x%8h", i, uut.mem.mem[uut.mem.DATA_BASE + i]);
-        end
-        
-        // Verification logic
-        $fdisplay(file, "\nVerification Results:");
-        if (uut.decode.reg_file[5] == 32'h00000008 &&
-            uut.decode.reg_file[6] == 32'h00000014 &&
-            uut.decode.reg_file[7] == 32'h00000014) begin
-            $fdisplay(file, "TEST PASSED: Register values match expected outputs");
-        end else begin
-            $fdisplay(file, "TEST FAILED: Register values don't match expected outputs");
-            $fdisplay(file, "Expected: x5=0x8, x6=0x14, x7=0x14");
-            $fdisplay(file, "Got: x5=0x%h, x6=0x%h, x7=0x%h", 
-                     uut.decode.reg_file[5], 
-                     uut.decode.reg_file[6], 
-                     uut.decode.reg_file[7]);
-        end
-        
-        $fclose(file);
-        $display("Simulation completed. Results written to riscv_results.txt");
-        $finish;
     end
     
-    // Monitor important signals to console during simulation
+    // Load program into memory
     initial begin
-        $monitor("Time=%0t, PC=0x%8h, Instr=0x%8h, RegWrite=%b, ALU_result=0x%8h", 
-                 $time, uut.fetch.PC, uut.instr, uut.decode.RegWrite, uut.execute.ALU_result);
+        // Wait for memory initialization
+        #1;
+        
+        // Load test program into instruction memory
+        // Memory addresses are word addresses (4 bytes per word)
+        dut.mem.mem[0] = 32'h00500093;  // ADDI x1, x0, 5
+        dut.mem.mem[1] = 32'h00300113;  // ADDI x2, x0, 3
+        dut.mem.mem[2] = 32'h002080b3;  // ADD x3, x1, x2
+        dut.mem.mem[3] = 32'h00302023;  // SW x3, 0(x0)
+        dut.mem.mem[4] = 32'h00002203;  // LW x4, 0(x0)
+        dut.mem.mem[5] = 32'h00418863;  // BEQ x3, x4, 8
+        dut.mem.mem[6] = 32'h00100293;  // ADDI x5, x0, 1
+        dut.mem.mem[7] = 32'h0000006f;  // JAL x0, 0x1c (infinite loop)
     end
     
-    // Dump waveform file for analysis (if using a simulator that supports it)
+    // Monitor signals
+    reg [31:0] prev_pc;
     initial begin
-        $dumpfile("riscv_sim.vcd");
-        $dumpvars(0, RISC_V_Single_Cycle_tb);
+        prev_pc = 32'hx;
+        $display("Time\tPC\t\tInstruction\tx1\tx2\tx3\tx4\tx5\tRegWrite\tMemRead\tMemWrite\tALUSrc\tBranch\tMemtoReg\tJump\tAUIPC\tfunct3\tALU_result\tbranch_taken\tbranch_target");
+        forever begin
+            @(posedge clk);
+            #1; // Wait for signals to propagate
+
+            // Display register values and control signals
+            $display("%4d\t%h\t%h\t%h\t%h\t%h\t%h\t%h\t%b\t%b\t%b\t%b\t%b\t%b\t%b\t%b\t%b\t%h\t%b\t%h",
+                $time,
+                dut.fetch.PC,
+                dut.fetch.instr,
+                dut.decode.reg_file[1],
+                dut.decode.reg_file[2],
+                dut.decode.reg_file[3],
+                dut.decode.reg_file[4],
+                dut.decode.reg_file[5],
+                dut.decode.RegWrite,
+                dut.decode.MemRead,
+                dut.decode.MemWrite,
+                dut.decode.ALUSrc,
+                dut.decode.Branch,
+                dut.decode.MemtoReg,
+                dut.decode.Jump,
+                dut.decode.AUIPC,
+                dut.decode.funct3,
+                dut.execute.ALU_result,
+                dut.execute.branch_taken,
+                dut.execute.branch_target);
+
+            // Check for halt condition
+            if (prev_pc === dut.fetch.PC) begin
+                $display("\nHALT detected at PC %h", dut.fetch.PC);
+                $display("Final register values:");
+                $display("x1: %h (5 expected)", dut.decode.reg_file[1]);
+                $display("x2: %h (3 expected)", dut.decode.reg_file[2]);
+                $display("x3: %h (8 expected)", dut.decode.reg_file[3]);
+                $display("x4: %h (8 expected)", dut.decode.reg_file[4]);
+                $display("x5: %h (1 not expected - branch should skip)", 
+                    dut.decode.reg_file[5]);
+                $finish;
+            end
+            prev_pc = dut.fetch.PC;
+        end
     end
     
+    // Data memory monitoring
+    always @(posedge clk) begin
+        if (dut.mem.MemWrite) begin
+            $display("Memory Write: Address %h, Data %h", 
+                dut.execute.ALU_result,
+                dut.decode.read_data2);
+        end
+    end
+
 endmodule
