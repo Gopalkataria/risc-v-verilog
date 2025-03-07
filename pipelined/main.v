@@ -2,10 +2,10 @@ module RISC_V_Pipelined_CPU (
     input clk,
     input reset
 );
-    // Pipeline register wires - IF/ID stage
+    
     wire [31:0] IF_ID_PC, IF_ID_Instr;
     
-    // Pipeline register wires - ID/EX stage
+    
     wire [31:0] ID_EX_PC, ID_EX_Instr;
     wire [31:0] ID_EX_RegR1, ID_EX_RegR2, ID_EX_Imm;
     wire [4:0] ID_EX_Rs1, ID_EX_Rs2, ID_EX_Rd;
@@ -13,17 +13,17 @@ module RISC_V_Pipelined_CPU (
     wire ID_EX_MemRead, ID_EX_MemWrite, ID_EX_RegWrite, ID_EX_MemtoReg;
     wire ID_EX_ALUSrc, ID_EX_Branch, ID_EX_Jump, ID_EX_AUIPC;
     
-    // Pipeline register wires - EX/MEM stage
+    
     wire [31:0] EX_MEM_ALUResult, EX_MEM_RegR2;
     wire [4:0] EX_MEM_Rd;
     wire EX_MEM_MemRead, EX_MEM_MemWrite, EX_MEM_RegWrite, EX_MEM_MemtoReg;
     
-    // Pipeline register wires - MEM/WB stage
+    
     wire [31:0] MEM_WB_MemData, MEM_WB_ALUResult;
     wire [4:0] MEM_WB_Rd;
     wire MEM_WB_RegWrite, MEM_WB_MemtoReg;
     
-    // Additional wires for data and control signals
+    
     wire [31:0] PC_Out, Instr, NextPC;
     wire [31:0] RegR1Data, RegR2Data, ImmGenOut;
     wire [4:0] Rs1, Rs2, Rd;
@@ -32,16 +32,16 @@ module RISC_V_Pipelined_CPU (
     wire [2:0] Funct3;
     wire [6:0] Funct7;
     
-    // Control signals
+    
     wire MemRead, MemWrite, ALUSrc, RegWrite, MemtoReg, Branch, Jump, AUIPC;
     wire [3:0] ALUCtrl;
     
-    // Hazard detection and forwarding signals
+    
     wire PCWrite, IF_ID_Write, ID_EX_Flush;
     wire [1:0] ForwardA, ForwardB, PCSrc;
     wire BranchTaken, InstrFlush;
     
-    // Instantiate Fetch stage
+    
     Fetch fetch_stage (
         .clk(clk),
         .reset(reset),
@@ -56,7 +56,7 @@ module RISC_V_Pipelined_CPU (
         .instr(Instr)
     );
     
-    // IF/ID Pipeline Register
+    
     IF_ID if_id_reg (
         .clk(clk),
         .reset(reset),
@@ -68,7 +68,7 @@ module RISC_V_Pipelined_CPU (
         .instr_out(IF_ID_Instr)
     );
     
-    // Decode stage
+    
     Decode decode_stage (
         .clk(clk),
         .rst(reset),
@@ -94,7 +94,7 @@ module RISC_V_Pipelined_CPU (
         .funct7(Funct7)
     );
     
-    // ID/EX Pipeline Register
+    
     ID_EX id_ex_reg (
         .clk(clk),
         .reset(reset),
@@ -135,14 +135,14 @@ module RISC_V_Pipelined_CPU (
         .auipc_out(ID_EX_AUIPC)
     );
     
-    // Execute stage
+    
     Execute execute_stage (
         .PC(ID_EX_PC),
         .read_data1(ID_EX_RegR1),
         .read_data2(ID_EX_RegR2),
         .imm(ID_EX_Imm),
-        .funct3(ID_EX_Instr[14:12]),  // Extract funct3 from instruction
-        .funct7(ID_EX_Instr[31:25]),  // Extract funct7 from instruction
+        .funct3(ID_EX_Instr[14:12]),  
+        .funct7(ID_EX_Instr[31:25]),  
         .forwardA(ForwardA),
         .forwardB(ForwardB),
         .alu_result_MEM(EX_MEM_ALUResult),
@@ -154,7 +154,7 @@ module RISC_V_Pipelined_CPU (
         .branch_target(BranchTarget)
     );
     
-    // EX/MEM Pipeline Register
+    
     EX_MEM ex_mem_reg (
         .clk(clk),
         .reset(reset),
@@ -174,7 +174,7 @@ module RISC_V_Pipelined_CPU (
         .mem_to_reg_out(EX_MEM_MemtoReg)
     );
     
-    // Data Memory (Memory stage)
+    
     DataMemory data_memory (
         .clk(clk),
         .reset(reset),
@@ -185,7 +185,7 @@ module RISC_V_Pipelined_CPU (
         .read_data(MemReadData)
     );
     
-    // MEM/WB Pipeline Register
+    
     MEM_WB mem_wb_reg (
         .clk(clk),
         .reset(reset),
@@ -201,7 +201,7 @@ module RISC_V_Pipelined_CPU (
         .mem_to_reg_out(MEM_WB_MemtoReg)
     );
     
-    // Write Back stage
+    
     WriteBack writeback_stage (
         .ALU_result(MEM_WB_ALUResult),
         .mem_read_data(MEM_WB_MemData),
@@ -209,7 +209,7 @@ module RISC_V_Pipelined_CPU (
         .reg_write_data(RegWriteData)
     );
     
-    // Hazard Detection Unit - Adding a new module for hazard detection
+    
     HazardDetectionUnit hazard_detection_unit (
         .ID_EX_MemRead(ID_EX_MemRead),
         .ID_EX_Rd(ID_EX_Rd),
@@ -223,7 +223,7 @@ module RISC_V_Pipelined_CPU (
         .InstrFlush(InstrFlush)
     );
     
-    // Forwarding Unit - Adding a new module for data forwarding
+    
     ForwardingUnit forwarding_unit (
         .ID_EX_Rs1(ID_EX_Rs1),
         .ID_EX_Rs2(ID_EX_Rs2),
@@ -235,12 +235,12 @@ module RISC_V_Pipelined_CPU (
         .ForwardB(ForwardB)
     );
     
-    // Branch Prediction Logic
+    
     assign PCSrc = (BranchTaken || ID_EX_Jump) ? 2'b01 : 2'b00;
 
 endmodule
 
-// Hazard Detection Unit - New module
+
 module HazardDetectionUnit (
     input ID_EX_MemRead,
     input [4:0] ID_EX_Rd,
@@ -255,30 +255,30 @@ module HazardDetectionUnit (
 );
     
     always @(*) begin
-        // Default values
+        
         PCWrite = 1'b1;
         IF_ID_Write = 1'b1;
         ID_EX_Flush = 1'b0;
         InstrFlush = 1'b0;
         
-        // Load-use hazard detection (stall pipeline)
+        
         if (ID_EX_MemRead && 
             ((ID_EX_Rd == IF_ID_Rs1) || (ID_EX_Rd == IF_ID_Rs2)) &&
             (ID_EX_Rd != 0)) begin
-            PCWrite = 1'b0;     // Don't update PC
-            IF_ID_Write = 1'b0; // Don't update IF/ID register
-            ID_EX_Flush = 1'b1; // Insert bubble in EX stage
+            PCWrite = 1'b0;     
+            IF_ID_Write = 1'b0; 
+            ID_EX_Flush = 1'b1; 
         end
         
-        // Branch/Jump hazard (flush pipeline)
+        
         if (Branch_Taken || Jump) begin
-            InstrFlush = 1'b1;  // Flush the instruction in IF stage
-            ID_EX_Flush = 1'b1; // Insert bubble in ID/EX register
+            InstrFlush = 1'b1;  
+            ID_EX_Flush = 1'b1; 
         end
     end
 endmodule
 
-// Forwarding Unit - New module
+
 module ForwardingUnit (
     input [4:0] ID_EX_Rs1,
     input [4:0] ID_EX_Rs2,
@@ -291,20 +291,20 @@ module ForwardingUnit (
 );
     
     always @(*) begin
-        // Forward A logic (for first ALU operand)
-        if (EX_MEM_RegWrite && (EX_MEM_Rd != 0) && (EX_MEM_Rd == ID_EX_Rs1))
-            ForwardA = 2'b10; // Forward from MEM stage
-        else if (MEM_WB_RegWrite && (MEM_WB_Rd != 0) && (MEM_WB_Rd == ID_EX_Rs1))
-            ForwardA = 2'b01; // Forward from WB stage
-        else
-            ForwardA = 2'b00; // No forwarding
         
-        // Forward B logic (for second ALU operand)
-        if (EX_MEM_RegWrite && (EX_MEM_Rd != 0) && (EX_MEM_Rd == ID_EX_Rs2))
-            ForwardB = 2'b10; // Forward from MEM stage
-        else if (MEM_WB_RegWrite && (MEM_WB_Rd != 0) && (MEM_WB_Rd == ID_EX_Rs2))
-            ForwardB = 2'b01; // Forward from WB stage
+        if (EX_MEM_RegWrite && (EX_MEM_Rd != 0) && (EX_MEM_Rd == ID_EX_Rs1))
+            ForwardA = 2'b10; 
+        else if (MEM_WB_RegWrite && (MEM_WB_Rd != 0) && (MEM_WB_Rd == ID_EX_Rs1))
+            ForwardA = 2'b01; 
         else
-            ForwardB = 2'b00; // No forwarding
+            ForwardA = 2'b00; 
+        
+        
+        if (EX_MEM_RegWrite && (EX_MEM_Rd != 0) && (EX_MEM_Rd == ID_EX_Rs2))
+            ForwardB = 2'b10; 
+        else if (MEM_WB_RegWrite && (MEM_WB_Rd != 0) && (MEM_WB_Rd == ID_EX_Rs2))
+            ForwardB = 2'b01; 
+        else
+            ForwardB = 2'b00; 
     end
 endmodule

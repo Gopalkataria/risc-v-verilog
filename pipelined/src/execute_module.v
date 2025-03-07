@@ -9,7 +9,7 @@ module Execute(
     input [31:0] alu_result_MEM, reg_write_data_WB,
     input ALUSrc,
     input Branch,
-    output reg [31:0] ALU_result,
+    output  [31:0] ALU_result,
     output reg branch_taken,
     output reg [31:0] branch_target
 );
@@ -35,15 +35,19 @@ module Execute(
             default: operand2 = read_data2;
         endcase
     end
+
+    wire [63:0] alu_result_wire;  // Full 64-bit result
     
-    // ALU Operation
-    alu_64bit alu_unit (
+     alu_64bit alu_unit (
         .funct3(funct3),
         .funct7(funct7),
-        .a(operand1),
-        .b(operand2),
-        .result(ALU_result)
+        .a({{32{operand1[31]}}, operand1}),  // Sign-extend operand1
+        .b({{32{operand2[31]}}, operand2}),  // Sign-extend operand2
+        .result(alu_result_wire)
     );
+
+    // Assign only the lower 32 bits to ALU_result
+    assign ALU_result = alu_result_wire[31:0];
     
     // Branch Target Calculation
     always @(*) begin
