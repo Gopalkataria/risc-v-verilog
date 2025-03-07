@@ -1,4 +1,4 @@
-`include "controlunit_module.v" 
+
 module Decode (
     input clk,
     input rst,                 
@@ -34,3 +34,4 @@ module Decode (
         .Jump(Jump),
         .AUIPC(AUIPC)
     );
+endmodule
