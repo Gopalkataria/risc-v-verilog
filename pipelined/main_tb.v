@@ -28,7 +28,7 @@ module RISC_V_Pipelined_CPU_TB;
         // Wait for reset to settle
         #5;
         
-        
+        // Writing instructions manually (verify memory path)
             cpu.fetch_stage.instr_mem.instr_mem[0] = 32'h00500093; // addi x1, x0, 5
             cpu.fetch_stage.instr_mem.instr_mem[1] = 32'h00A00113; // addi x2, x0, 10
             cpu.fetch_stage.instr_mem.instr_mem[2] = 32'h002081B3; // add x3, x1, x2
@@ -36,8 +36,6 @@ module RISC_V_Pipelined_CPU_TB;
             cpu.fetch_stage.instr_mem.instr_mem[4] = 32'h00208463; // beq x1, x2, label
             cpu.fetch_stage.instr_mem.instr_mem[6] = 32'h004000EF; // jal x1, label
             cpu.fetch_stage.instr_mem.instr_mem[7] = 32'h00008067; // ret
-            cpu.fetch_stage.instr_mem.instr_mem[5] = 32'h00100073; // ecall
-        
     end
 
     // Termination
