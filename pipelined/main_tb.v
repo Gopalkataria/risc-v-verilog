@@ -30,14 +30,14 @@ module RISC_V_Pipelined_CPU_TB;
         
         // Writing instructions manually (verify memory path)
         if ($test$plusargs("debug")) begin
-            cpu.fetch_stage.instr_mem.memory[0] = 32'h00500093; // addi x1, x0, 5
-            cpu.fetch_stage.instr_mem.memory[1] = 32'h00A00113; // addi x2, x0, 10
-            cpu.fetch_stage.instr_mem.memory[2] = 32'h002081B3; // add x3, x1, x2
-            cpu.fetch_stage.instr_mem.memory[3] = 32'h0041A233; // sw x4, 0(x3)
-            cpu.fetch_stage.instr_mem.memory[4] = 32'h00208463; // beq x1, x2, label
-            cpu.fetch_stage.instr_mem.memory[5] = 32'h00100073; // ecall
-            cpu.fetch_stage.instr_mem.memory[6] = 32'h004000EF; // jal x1, label
-            cpu.fetch_stage.instr_mem.memory[7] = 32'h00008067; // ret
+            cpu.fetch_stage.instr_mem.instr_mem[0] = 32'h00500093; // addi x1, x0, 5
+            cpu.fetch_stage.instr_mem.instr_mem[1] = 32'h00A00113; // addi x2, x0, 10
+            cpu.fetch_stage.instr_mem.instr_mem[2] = 32'h002081B3; // add x3, x1, x2
+            cpu.fetch_stage.instr_mem.instr_mem[3] = 32'h0041A233; // sw x4, 0(x3)
+            cpu.fetch_stage.instr_mem.instr_mem[4] = 32'h00208463; // beq x1, x2, label
+            cpu.fetch_stage.instr_mem.instr_mem[5] = 32'h00100073; // ecall
+            cpu.fetch_stage.instr_mem.instr_mem[6] = 32'h004000EF; // jal x1, label
+            cpu.fetch_stage.instr_mem.instr_mem[7] = 32'h00008067; // ret
         end
     end
 
@@ -51,9 +51,9 @@ module RISC_V_Pipelined_CPU_TB;
     initial begin
         $monitor("Time=%0t | PC=%h | Instr=%h | ALUResult=%h | Reg1=%h | Reg2=%h | Reg3=%h | Branch=%b | Jump=%b", 
                  $time, cpu.PC_Out, cpu.Instr, cpu.ALUResult, 
-                 cpu.decode_stage.reg_file.registers[1], 
-                 cpu.decode_stage.reg_file.registers[2], 
-                 cpu.decode_stage.reg_file.registers[3], 
+                 cpu.decode_stage.registers[1], 
+                 cpu.decode_stage.registers[2], 
+                 cpu.decode_stage.registers[3], 
                  cpu.BranchTaken, cpu.Jump);
     end
 
