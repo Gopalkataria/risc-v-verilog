@@ -2,9 +2,9 @@ module Decode(
     input clk,
     input rst,
     input [31:0] instr,
-    input [4:0] reg_write_addr, 
-    input [31:0] reg_write_data, 
-    input RegWrite_WB, 
+    input [4:0] reg_write_addr,
+    input [31:0] reg_write_data,
+    input RegWrite_WB,
     output [31:0] read_data1,
     output [31:0] read_data2,
     output [31:0] imm,
@@ -21,32 +21,32 @@ module Decode(
     output [6:0] funct7
 );
 
-    
-    reg [31:0] registers [0:31];
-    integer i;
-    initial begin
-        for (i = 0; i < 32; i = i + 1)
-            registers[i] = 32'h0;
-    end
-
-    
     assign rs1 = instr[19:15];
     assign rs2 = instr[24:20];
     assign rd = instr[11:7];
     assign funct3 = instr[14:12];
     assign funct7 = instr[31:25];
 
-    
-    assign read_data1 = (rs1 != 0) ? registers[rs1] : 32'h0;
-    assign read_data2 = (rs2 != 0) ? registers[rs2] : 32'h0;
+    // Instantiate the Register File
+    RegisterFile reg_file (
+        .clk(clk),
+        .rst(rst),
+        .RegWrite(RegWrite_WB),
+        .rs1(rs1),
+        .rs2(rs2),
+        .rd(reg_write_addr),
+        .write_data(reg_write_data),
+        .read_data1(read_data1),
+        .read_data2(read_data2)
+    );
 
-    
+    // Instantiate Immediate Generator
     ImmGen imm_gen(
         .instr(instr),
         .imm(imm)
     );
 
-    
+    // Instantiate Control Unit
     ControlUnit control_unit(
         .opcode(instr[6:0]),
         .RegWrite(), 
@@ -59,19 +59,13 @@ module Decode(
         .AUIPC(AUIPC)
     );
 
-    
- always @(*) begin
-    case (instr[6:0])
-        7'b0110011: alu_ctrl = {instr[30], instr[14:12]};
-        7'b0010011: alu_ctrl = {1'b0, instr[14:12]};
-        default:    alu_ctrl = 4'b0000;
-    endcase
-end
-    
-    always @(posedge clk) begin
-        if (RegWrite_WB && reg_write_addr != 0) begin
-            registers[reg_write_addr] <= reg_write_data;
-        end
+    // ALU Control Logic
+    always @(*) begin
+        case (instr[6:0])
+            7'b0110011: alu_ctrl = {instr[30], instr[14:12]}; // R-type
+            7'b0010011: alu_ctrl = {1'b0, instr[14:12]};      // I-type
+            default:    alu_ctrl = 4'b0000;
+        endcase
     end
 
 endmodule

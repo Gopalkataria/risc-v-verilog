@@ -50,11 +50,11 @@ module RISC_V_Pipelined_CPU_TB;
 
         $monitor("%3t | %h | %h | %h | %h | %h | %h | %h | %h | %b \t| %b", 
                  $time, cpu.PC_Out, cpu.Instr, cpu.ALUResult, 
-                 cpu.decode_stage.registers[1], 
-                 cpu.decode_stage.registers[2], 
-                 cpu.decode_stage.registers[3], 
-                    cpu.decode_stage.registers[4],
-                    cpu.decode_stage.registers[5],
+                 cpu.decode_stage.reg_file.registers[1], 
+                 cpu.decode_stage.reg_file.registers[2], 
+                 cpu.decode_stage.reg_file.registers[3], 
+                    cpu.decode_stage.reg_file.registers[4],
+                    cpu.decode_stage.reg_file.registers[5],
                  cpu.BranchTaken, cpu.Jump);
     end
 
