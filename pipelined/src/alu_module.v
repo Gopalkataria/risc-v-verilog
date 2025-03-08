@@ -208,7 +208,6 @@ module sra_64bit(
 endmodule
 
 
-    
 module alu_64bit(
     input [2:0] funct3,     
     input [6:0] funct7,     
@@ -303,23 +302,4 @@ module alu_64bit(
         endcase
     end
 endmodule
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 

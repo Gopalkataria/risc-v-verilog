@@ -1,68 +1,179 @@
-module Execute(
-    input [31:0] PC,
-    input [31:0] read_data1,
-    input [31:0] read_data2,
-    input [31:0] imm,
+module execute(
+    input clk,
+    input rst,
+    input [63:0] pc_in,
+    input [63:0] rs1_data,
+    input [63:0] rs2_data,
+    input [63:0] imm,
+    input [63:0] branch_target,
+    input mem_read,
+    input mem_write,
+    input reg_write,
+    input [4:0] rs1_addr,
+    input [4:0] rs2_addr,
+    input [4:0] rd_addr,
     input [2:0] funct3,
     input [6:0] funct7,
-    input [1:0] forwardA, forwardB,
-    input [31:0] alu_result_MEM, reg_write_data_WB,
-    input ALUSrc,
-    input Branch,
-    output  [31:0] ALU_result,
-    output reg branch_taken,
-    output reg [31:0] branch_target
+    input [6:0] opcode,
+    input alu_src,
+    input branch,
+    input jump,
+    input mem_to_reg,
+    output wire [63:0] alu_result,
+    output wire [63:0] mem_address,
+    output wire [63:0] mem_write_data,
+    output wire branch_taken,
+    output wire [63:0] jump_target,
+    output wire reg_write_out,
+    output wire [4:0] rd_addr_out
 );
-
-    // MUX for Forwarding A (Selecting ALU Operand 1)
-    reg [31:0] operand1;
-    always @(*) begin
-        case (forwardA)
-            2'b00: operand1 = read_data1;           // From ID/EX pipeline
-            2'b01: operand1 = reg_write_data_WB;   // From WB stage
-            2'b10: operand1 = alu_result_MEM;      // From MEM stage
-            default: operand1 = read_data1;
-        endcase
-    end
+    // ALU operand selection
+    wire [63:0] alu_operand2 = alu_src ? imm : rs2_data;
     
-    // MUX for Forwarding B (Selecting ALU Operand 2)
-    reg [31:0] operand2;
-    always @(*) begin
-        case (forwardB)
-            2'b00: operand2 = (ALUSrc) ? imm : read_data2;
-            2'b01: operand2 = reg_write_data_WB;
-            2'b10: operand2 = alu_result_MEM;
-            default: operand2 = read_data2;
-        endcase
-    end
-
-    wire [63:0] alu_result_wire;  // Full 64-bit result
-    
-     alu_64bit alu_unit (
+    // ALU instantiation
+    alu_64bit alu(
         .funct3(funct3),
         .funct7(funct7),
-        .a({{32{operand1[31]}}, operand1}),  // Sign-extend operand1
-        .b({{32{operand2[31]}}, operand2}),  // Sign-extend operand2
-        .result(alu_result_wire)
+        .a(rs1_data),
+        .b(alu_operand2),
+        .result(alu_result)
     );
-
-    // Assign only the lower 32 bits to ALU_result
-    assign ALU_result = alu_result_wire[31:0];
     
-    // Branch Target Calculation
+    // Branch condition evaluation
+    reg branch_taken_reg;
     always @(*) begin
-        branch_target = PC + (imm << 1);  // PC-relative addressing
+        branch_taken_reg = 1'b0;
+        if (branch) begin
+            case (funct3)
+                3'b000: branch_taken_reg = (rs1_data == rs2_data);    // BEQ
+                3'b001: branch_taken_reg = (rs1_data != rs2_data);    // BNE
+                3'b100: branch_taken_reg = ($signed(rs1_data) < $signed(rs2_data));  // BLT
+                3'b101: branch_taken_reg = ($signed(rs1_data) >= $signed(rs2_data)); // BGE
+                3'b110: branch_taken_reg = (rs1_data < rs2_data);     // BLTU
+                3'b111: branch_taken_reg = (rs1_data >= rs2_data);    // BGEU
+                default: branch_taken_reg = 1'b0;
+            endcase
+        end
     end
     
-    // Branch Decision
+    // Jump target calculation
+    reg [63:0] jump_target_reg;
+    reg jump_taken;
     always @(*) begin
+        jump_target_reg = 64'b0;
+        jump_taken = 1'b0;
+        
+        if (jump) begin
+            if (opcode == 7'b1101111) begin  // JAL
+                jump_target_reg = pc_in + imm;
+                jump_taken = 1'b1;
+            end else if (opcode == 7'b1100111 && funct3 == 3'b000) begin  // JALR
+                jump_target_reg = (rs1_data + imm) & ~64'h1; // Clear LSB as per spec
+                jump_taken = 1'b1;
+            end
+        end
+    end
+    
+    // Memory operations
+    reg [63:0] mem_address_reg;
+    reg [63:0] mem_write_data_reg;
+    
+    always @(*) begin
+        // Calculate memory address
+        mem_address_reg = rs1_data + imm;
+        
+        // Prepare write data based on width
         case (funct3)
-            3'b000: branch_taken = (operand1 == operand2) && Branch;  // BEQ
-            3'b001: branch_taken = (operand1 != operand2) && Branch;  // BNE
-            3'b100: branch_taken = ($signed(operand1) < $signed(operand2)) && Branch; // BLT
-            3'b101: branch_taken = ($signed(operand1) >= $signed(operand2)) && Branch; // BGE
-            default: branch_taken = 1'b0;
+            3'b000: mem_write_data_reg = {56'b0, rs2_data[7:0]};   // SB - Store Byte
+            3'b001: mem_write_data_reg = {48'b0, rs2_data[15:0]};  // SH - Store Halfword
+            3'b010: mem_write_data_reg = {32'b0, rs2_data[31:0]};  // SW - Store Word
+            3'b011: mem_write_data_reg = rs2_data;                 // SD - Store Doubleword
+            default: mem_write_data_reg = rs2_data;
         endcase
     end
     
+    // Pass through control signals
+    reg reg_write_out_reg;
+    reg [4:0] rd_addr_out_reg;
+    
+    always @(*) begin
+        reg_write_out_reg = reg_write;
+        rd_addr_out_reg = rd_addr;
+    end
+    
+    // Connect internal registers to outputs
+    assign branch_taken = branch_taken_reg | jump_taken;
+    assign jump_target = jump_target_reg;
+    assign mem_address = mem_address_reg;
+    assign mem_write_data = mem_write_data_reg;
+    assign reg_write_out = reg_write_out_reg;
+    assign rd_addr_out = rd_addr_out_reg;
+
+endmodule
+
+
+module ex_mem_register(
+    input clk,                          
+    input rst,                          
+    input stall,                        
+    input flush,                        
+    input [63:0] alu_result_in,         
+    input [63:0] mem_address_in,        
+    input [63:0] mem_write_data_in,     
+    input branch_taken_in,              
+    input [63:0] jump_target_in,        
+    input reg_write_in,                 
+     input [2:0] funct3_in,             
+    input [6:0] funct7_in,              
+    output reg [2:0 ] funct3_out,       
+    output reg [6:0] funct7_out,        
+    input [4:0] rd_addr_in,             
+    output reg [63:0] alu_result_out,   
+    output reg [63:0] mem_address_out,  
+    output reg [63:0] mem_write_data_out, 
+    output reg branch_taken_out,        
+    output reg [63:0] jump_target_out,  
+    output reg reg_write_out,           
+    output reg [4:0] rd_addr_out        
+);
+    
+    always @(posedge clk or posedge rst) begin
+        if (rst) begin
+            
+            alu_result_out <= 64'b0;
+            mem_address_out <= 64'b0;
+            mem_write_data_out <= 64'b0;
+            branch_taken_out <= 1'b0;
+            jump_target_out <= 64'b0;
+            reg_write_out <= 1'b0;
+            rd_addr_out <= 5'b0;
+        end else if (flush) begin
+            
+            alu_result_out <= 64'b0;
+            mem_address_out <= 64'b0;
+            mem_write_data_out <= 64'b0;
+            branch_taken_out <= 1'b0;
+            jump_target_out <= 64'b0;
+            reg_write_out <= 1'b0;
+            rd_addr_out <= 5'b0;
+        end else if (stall) begin
+            
+            alu_result_out <= alu_result_out;
+            mem_address_out <= mem_address_out;
+            mem_write_data_out <= mem_write_data_out;
+            branch_taken_out <= branch_taken_out;
+            jump_target_out <= jump_target_out;
+            reg_write_out <= reg_write_out;
+            rd_addr_out <= rd_addr_out;
+        end else begin
+            
+            alu_result_out <= alu_result_in;
+            mem_address_out <= mem_address_in;
+            mem_write_data_out <= mem_write_data_in;
+            branch_taken_out <= branch_taken_in;
+            jump_target_out <= jump_target_in;
+            reg_write_out <= reg_write_in;
+            rd_addr_out <= rd_addr_in;
+        end
+    end
 endmodule
