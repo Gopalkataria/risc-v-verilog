@@ -705,22 +705,14 @@ module execute(
     jump_target = 64'b0; // Default to no jump
 
     // Branch instructions (B-type)
-    case ({funct7, funct3})
-    {7'b0000000, 3'b000}: branch_taken = (rs1_data == rs2_data);  // BEQ
-    {7'b0000000, 3'b001}: branch_taken = (rs1_data != rs2_data);  // BNE
-    {7'b0000000, 3'b100}: branch_taken = ($signed(rs1_data) < $signed(rs2_data));  // BLT
-    {7'b0000000, 3'b101}: branch_taken = ($signed(rs1_data) >= $signed(rs2_data)); // BGE
-    {7'b0000000, 3'b110}: branch_taken = (rs1_data < rs2_data);  // BLTU
-    {7'b0000000, 3'b111}: branch_taken = (rs1_data >= rs2_data); // BGEU
-
-    // Example for alternate encodings (if applicable)
-    {7'b0100000, 3'b000}: branch_taken = (rs1_data == rs2_data); // Alternative BEQ
-    {7'b0100000, 3'b100}: branch_taken = ($signed(rs1_data) < $signed(rs2_data)); // Alternative BLT
-    // Add more cases as needed based on your instruction set specification.
-
-    default: branch_taken = 1'b0; // Default case to avoid latches
-endcase
-
+    case (funct3)
+        3'b000: branch_taken = (rs1_data == rs2_data); // BEQ
+        3'b001: branch_taken = (rs1_data != rs2_data); // BNE
+        3'b100: branch_taken = ($signed(rs1_data) < $signed(rs2_data)); // BLT
+        3'b101: branch_taken = ($signed(rs1_data) >= $signed(rs2_data)); // BGE
+        3'b110: branch_taken = (rs1_data < rs2_data); // BLTU
+        3'b111: branch_taken = (rs1_data >= rs2_data); // BGEU
+    endcase
 
     // Jump instructions (JAL, JALR)
     if (funct3 == 3'b000 && funct7 == 7'b0000000) begin // JAL
