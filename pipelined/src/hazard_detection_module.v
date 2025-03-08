@@ -1,42 +1,34 @@
 module hazard_detection_unit(
-    input [4:0] id_ex_rs1_addr,       
-    input [4:0] id_ex_rs2_addr,       
-    input [4:0] ex_mem_rd_addr,       
-    input [4:0] mem_wb_rd_addr,       
-    input id_ex_mem_read,             
-    input ex_mem_reg_write,           
-    input mem_wb_reg_write,           
-    output reg stall                  
+    input [4:0] id_ex_rs1_addr,       // Source register 1 address in ID/EX
+    input [4:0] id_ex_rs2_addr,       // Source register 2 address in ID/EX
+    input [4:0] ex_mem_rd_addr,       // Destination register address in EX/MEM
+    input [4:0] mem_wb_rd_addr,       // Destination register address in MEM/WB
+    input id_ex_mem_read,             // Memory read signal in ID/EX (load instruction)
+    input ex_mem_reg_write,           // Register write signal in EX/MEM
+    input mem_wb_reg_write,           // Register write signal in MEM/WB
+    output reg stall                  // Stall signal
 );
-   
-    initial begin 
-        stall = 1'b0;
-    end
-    
+
     always @(*) begin
-       
+        // Default: No stall
         stall = 1'b0;
-        
-       
-        if (id_ex_mem_read && ex_mem_reg_write && 
-            (ex_mem_rd_addr != 5'b00000) && 
-            ((id_ex_rs1_addr == ex_mem_rd_addr) || (id_ex_rs2_addr == ex_mem_rd_addr))) begin
+
+        // Load-Use Hazard: Stall if a load instruction is followed by an instruction
+        // that depends on the loaded data.
+        if (id_ex_mem_read && 
+            ((id_ex_rs1_addr == ex_mem_rd_addr) || (id_ex_rs2_addr == ex_mem_rd_addr)) &&
+            (ex_mem_rd_addr != 5'b00000)) begin
             stall = 1'b1;
         end
-        
-       
-       
-        else if (!id_ex_mem_read && ex_mem_reg_write && 
-                (ex_mem_rd_addr != 5'b00000) &&
-                ((id_ex_rs1_addr == ex_mem_rd_addr) || (id_ex_rs2_addr == ex_mem_rd_addr))) begin
-            stall = 1'b1;
-        end
-        
-       
-       
-        else if (mem_wb_reg_write && 
-                (mem_wb_rd_addr != 5'b00000) &&
-                ((id_ex_rs1_addr == mem_wb_rd_addr) || (id_ex_rs2_addr == mem_wb_rd_addr))) begin
+
+        // RAW Hazard: Stall if an instruction depends on the result of a previous
+        // instruction in the EX/MEM or MEM/WB stage.
+        else if ((ex_mem_reg_write && 
+                 ((id_ex_rs1_addr == ex_mem_rd_addr) || (id_ex_rs2_addr == ex_mem_rd_addr)) &&
+                 (ex_mem_rd_addr != 5'b00000)) ||
+                (mem_wb_reg_write && 
+                 ((id_ex_rs1_addr == mem_wb_rd_addr) || (id_ex_rs2_addr == mem_wb_rd_addr)) &&
+                 (mem_wb_rd_addr != 5'b00000))) begin
             stall = 1'b1;
         end
     end
