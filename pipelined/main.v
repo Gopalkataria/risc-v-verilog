@@ -489,38 +489,43 @@ endmodule
 ////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-
 module decode(
-    input clk,                          
-    input rst,                          
-    input [31:0] instruction,           
-    input [63:0] pc,                    
-    input instruction_valid,            
-    input reg_write_back,               
-    input [4:0] write_back_addr,        
-    input [63:0] write_back_data,       
-    output [63:0] rs1_data,             
-    output [63:0] rs2_data,             
-    output [63:0] imm,                  
-    output [63:0] branch_target,        
-    output mem_read,                    
-    output mem_write,                   
-    output reg_write,                   
-    output [4:0] rs1_addr,              
-    output [4:0] rs2_addr,              
-    output [4:0] rd_addr,               
-    output [2:0] funct3,                
-    output [6:0] funct7                 
+    input clk,                          // Clock signal
+    input rst,                          // Reset signal
+    input [31:0] instruction,           // Fetched instruction
+    input [63:0] pc,                    // Program counter
+    input instruction_valid,            // Indicates if the instruction is valid
+    input reg_write_back,               // Write-back signal from WB stage
+    input [4:0] write_back_addr,        // Write-back address from WB stage
+    input [63:0] write_back_data,       // Write-back data from WB stage
+    output [63:0] rs1_data,             // Data from source register 1
+    output [63:0] rs2_data,             // Data from source register 2
+    output [63:0] imm,                  // Immediate value
+    output [63:0] branch_target,        // Branch target address
+    output mem_read,                    // Memory read signal
+    output mem_write,                   // Memory write signal
+    output reg_write,                   // Register write signal
+    output [4:0] rs1_addr,              // Source register 1 address
+    output [4:0] rs2_addr,              // Source register 2 address
+    output [4:0] rd_addr,               // Destination register address
+    output [2:0] funct3,                // Function code 3 (for ALU and memory operations)
+    output [6:0] funct7,                // Function code 7 (for ALU operations)
+    output [6:0] opcode,                // Opcode (added for instruction type)
+    output alu_src,                     // ALU source select (0: rs2, 1: imm)
+    output branch,                      // Branch instruction
+    output jump,                        // Jump instruction
+    output mem_to_reg,                  // Memory to register signal
+    output [1:0] alu_op                 // ALU operation control
 );
-    
-    wire [6:0] opcode = instruction[6:0];       
-    assign rs1_addr = instruction[19:15];       
-    assign rs2_addr = instruction[24:20];       
-    assign rd_addr = instruction[11:7];         
-    assign funct3 = instruction[14:12];         
-    assign funct7 = instruction[31:25];         
+    // Extract fields from the instruction
+    assign opcode = instruction[6:0];       // Opcode field
+    assign rs1_addr = instruction[19:15];   // Source register 1 address
+    assign rs2_addr = instruction[24:20];   // Source register 2 address
+    assign rd_addr = instruction[11:7];     // Destination register address
+    assign funct3 = instruction[14:12];     // Function code 3
+    assign funct7 = instruction[31:25];     // Function code 7
 
-    
+    // Instantiate the register file
     register_file reg_file(
         .clk(clk),
         .rst(rst),
@@ -533,67 +538,87 @@ module decode(
         .rs2_data(rs2_data)
     );
 
-    
-    wire [63:0] imm_i = {{52{instruction[31]}}, instruction[31:20]}; 
-    wire [63:0] imm_s = {{52{instruction[31]}}, instruction[31:25], instruction[11:7]}; 
-    wire [63:0] imm_b = {{51{instruction[31]}}, instruction[31], instruction[7], instruction[30:25], instruction[11:8], 1'b0}; 
-    wire [63:0] imm_u = {instruction[31:12], 12'b0}; 
-    wire [63:0] imm_j = {{43{instruction[31]}}, instruction[31], instruction[19:12], instruction[20], instruction[30:21], 1'b0}; 
+    // Immediate value extraction
+    wire [63:0] imm_i = {{52{instruction[31]}}, instruction[31:20]}; // I-type immediate
+    wire [63:0] imm_s = {{52{instruction[31]}}, instruction[31:25], instruction[11:7]}; // S-type immediate
+    wire [63:0] imm_b = {{51{instruction[31]}}, instruction[31], instruction[7], instruction[30:25], instruction[11:8], 1'b0}; // B-type immediate
+    wire [63:0] imm_u = {instruction[31:12], 12'b0}; // U-type immediate
+    wire [63:0] imm_j = {{43{instruction[31]}}, instruction[31], instruction[19:12], instruction[20], instruction[30:21], 1'b0}; // J-type immediate
 
-    
-    assign imm = (opcode == 7'b0010011) ? imm_i : 
-                 (opcode == 7'b0100011) ? imm_s : 
-                 (opcode == 7'b1100011) ? imm_b : 
-                 (opcode == 7'b0110111 || opcode == 7'b0010111) ? imm_u : 
-                 (opcode == 7'b1101111) ? imm_j : 
-                 64'b0; 
+    // Select immediate value based on instruction type
+    assign imm = (opcode == 7'b0010011) ? imm_i : // I-type
+                 (opcode == 7'b0100011) ? imm_s : // S-type
+                 (opcode == 7'b1100011) ? imm_b : // B-type
+                 (opcode == 7'b0110111 || opcode == 7'b0010111) ? imm_u : // U-type
+                 (opcode == 7'b1101111) ? imm_j : // J-type
+                 64'b0; // Default
 
-    
+    // Branch target calculation
     assign branch_target = pc + imm;
 
-    
-    assign mem_read = (opcode == 7'b0000011); 
-    assign mem_write = (opcode == 7'b0100011); 
-    assign reg_write = (opcode == 7'b0110011 || opcode == 7'b0010011 || opcode == 7'b0000011 || opcode == 7'b1101111 || opcode == 7'b0010111); 
+    // Control signals
+    assign mem_read = (opcode == 7'b0000011); // Load instruction
+    assign mem_write = (opcode == 7'b0100011); // Store instruction
+    assign reg_write = (opcode == 7'b0110011 || opcode == 7'b0010011 || opcode == 7'b0000011 || opcode == 7'b1101111 || opcode == 7'b0010111); // R-type, I-type, Load, JAL, LUI
+    assign alu_src = (opcode == 7'b0010011 || opcode == 7'b0100011 || opcode == 7'b0000011); // ALU source is immediate for I-type, S-type, and Load/Store
+    assign branch = (opcode == 7'b1100011); // Branch instruction
+    assign jump = (opcode == 7'b1101111 || opcode == 7'b1100111); // Jump instruction (JAL or JALR)
+    assign mem_to_reg = (opcode == 7'b0000011); // Memory to register for Load instructions
+    assign alu_op = (opcode == 7'b0110011) ? 2'b10 : // R-type: ALU operation based on funct3 and funct7
+                    (opcode == 7'b0010011) ? 2'b11 : // I-type: ALU operation based on funct3
+                    (opcode == 7'b1100011) ? 2'b01 : // Branch: ALU operation for comparison
+                    2'b00; // Default: ALU operation for addition (e.g., address calculation)
 endmodule
 
 
 module id_ex_register(
-    input clk,                          
-    input rst,                          
-    input stall,                        
-    input flush,                        
-    input [63:0] pc_in,                 
-    input [63:0] rs1_data_in,           
-    input [63:0] rs2_data_in,           
-    input [63:0] imm_in,                
-    input [63:0] branch_target_in,      
-    input mem_read_in,                  
-    input mem_write_in,                 
-    input reg_write_in,                 
-    input [4:0] rs1_addr_in,            
-    input [4:0] rs2_addr_in,            
-    input [4:0] rd_addr_in,             
-    input [2:0] funct3_in,              
-    input [6:0] funct7_in,              
-    output reg [63:0] pc_out,           
-    output reg [63:0] rs1_data_out,     
-    output reg [63:0] rs2_data_out,     
-    output reg [63:0] imm_out,          
-    output reg [63:0] branch_target_out, 
-    output reg mem_read_out,            
-    output reg mem_write_out,           
-    output reg reg_write_out,           
-    output reg [4:0] rs1_addr_out,      
-    output reg [4:0] rs2_addr_out,      
-    output reg [4:0] rd_addr_out,       
-    output reg [2:0] funct3_out,        
-    output reg [6:0] funct7_out         
+    input clk,                          // Clock signal
+    input rst,                          // Reset signal
+    input stall,                        // Stall signal (freeze the register)
+    input flush,                        // Flush signal (clear the register)
+    input [63:0] pc_in,                 // Program counter from Decode stage
+    input [63:0] rs1_data_in,           // Data from source register 1
+    input [63:0] rs2_data_in,           // Data from source register 2
+    input [63:0] imm_in,                // Immediate value
+    input [63:0] branch_target_in,      // Branch target address
+    input mem_read_in,                  // Memory read signal
+    input mem_write_in,                 // Memory write signal
+    input reg_write_in,                 // Register write signal
+    input [4:0] rs1_addr_in,            // Source register 1 address
+    input [4:0] rs2_addr_in,            // Source register 2 address
+    input [4:0] rd_addr_in,             // Destination register address
+    input [2:0] funct3_in,              // Function code 3 (for ALU and memory operations)
+    input [6:0] funct7_in,              // Function code 7 (for ALU operations)
+    input [6:0] opcode_in,              // Opcode (added for instruction type)
+    input alu_src_in,                   // ALU source select (0: rs2, 1: imm)
+    input branch_in,                    // Branch instruction
+    input jump_in,                      // Jump instruction
+    input mem_to_reg_in,                // Memory to register signal
+    input [1:0] alu_op_in,              // ALU operation control
+    output reg [63:0] pc_out,           // Program counter to Execute stage
+    output reg [63:0] rs1_data_out,     // Data from source register 1 to Execute stage
+    output reg [63:0] rs2_data_out,     // Data from source register 2 to Execute stage
+    output reg [63:0] imm_out,          // Immediate value to Execute stage
+    output reg [63:0] branch_target_out, // Branch target address to Execute stage
+    output reg mem_read_out,            // Memory read signal to Execute stage
+    output reg mem_write_out,           // Memory write signal to Execute stage
+    output reg reg_write_out,           // Register write signal to Execute stage
+    output reg [4:0] rs1_addr_out,      // Source register 1 address to Execute stage
+    output reg [4:0] rs2_addr_out,      // Source register 2 address to Execute stage
+    output reg [4:0] rd_addr_out,       // Destination register address to Execute stage
+    output reg [2:0] funct3_out,        // Function code 3 to Execute stage
+    output reg [6:0] funct7_out,        // Function code 7 to Execute stage
+    output reg [6:0] opcode_out,        // Opcode to Execute stage
+    output reg alu_src_out,             // ALU source select to Execute stage
+    output reg branch_out,              // Branch instruction to Execute stage
+    output reg jump_out,                // Jump instruction to Execute stage
+    output reg mem_to_reg_out,          // Memory to register signal to Execute stage
+    output reg [1:0] alu_op_out         // ALU operation control to Execute stage
 );
-    
+    // Update the pipeline register on the rising edge of the clock
     always @(posedge clk or posedge rst) begin
         if (rst) begin
-            
+            // Reset all outputs
             pc_out <= 64'b0;
             rs1_data_out <= 64'b0;
             rs2_data_out <= 64'b0;
@@ -607,8 +632,14 @@ module id_ex_register(
             rd_addr_out <= 5'b0;
             funct3_out <= 3'b0;
             funct7_out <= 7'b0;
+            opcode_out <= 7'b0;
+            alu_src_out <= 1'b0;
+            branch_out <= 1'b0;
+            jump_out <= 1'b0;
+            mem_to_reg_out <= 1'b0;
+            alu_op_out <= 2'b0;
         end else if (flush) begin
-            
+            // Flush all outputs
             pc_out <= 64'b0;
             rs1_data_out <= 64'b0;
             rs2_data_out <= 64'b0;
@@ -622,8 +653,14 @@ module id_ex_register(
             rd_addr_out <= 5'b0;
             funct3_out <= 3'b0;
             funct7_out <= 7'b0;
+            opcode_out <= 7'b0;
+            alu_src_out <= 1'b0;
+            branch_out <= 1'b0;
+            jump_out <= 1'b0;
+            mem_to_reg_out <= 1'b0;
+            alu_op_out <= 2'b0;
         end else if (stall) begin
-            
+            // Stall: keep outputs unchanged
             pc_out <= pc_out;
             rs1_data_out <= rs1_data_out;
             rs2_data_out <= rs2_data_out;
@@ -637,8 +674,14 @@ module id_ex_register(
             rd_addr_out <= rd_addr_out;
             funct3_out <= funct3_out;
             funct7_out <= funct7_out;
+            opcode_out <= opcode_out;
+            alu_src_out <= alu_src_out;
+            branch_out <= branch_out;
+            jump_out <= jump_out;
+            mem_to_reg_out <= mem_to_reg_out;
+            alu_op_out <= alu_op_out;
         end else begin
-            
+            // Normal operation: pass inputs to outputs
             pc_out <= pc_in;
             rs1_data_out <= rs1_data_in;
             rs2_data_out <= rs2_data_in;
@@ -652,6 +695,12 @@ module id_ex_register(
             rd_addr_out <= rd_addr_in;
             funct3_out <= funct3_in;
             funct7_out <= funct7_in;
+            opcode_out <= opcode_in;
+            alu_src_out <= alu_src_in;
+            branch_out <= branch_in;
+            jump_out <= jump_in;
+            mem_to_reg_out <= mem_to_reg_in;
+            alu_op_out <= alu_op_in;
         end
     end
 endmodule
@@ -659,7 +708,6 @@ endmodule
 
 
 ////////////////////////////////////////////////////////////////////////////
-
 
 module execute(
     input clk,                          // Clock signal
@@ -677,7 +725,13 @@ module execute(
     input [4:0] rd_addr,                // Destination register address
     input [2:0] funct3,                 // Function code 3 (for ALU and memory operations)
     input [6:0] funct7,                 // Function code 7 (for ALU operations)
-    output wire  [63:0] alu_result,       // ALU result
+    input [6:0] opcode,                 // Opcode (added for instruction type)
+    input alu_src,                      // ALU source select (0: rs2, 1: imm)
+    input branch,                       // Branch instruction
+    input jump,                         // Jump instruction
+    input mem_to_reg,                   // Memory to register signal
+    input [1:0] alu_op,                 // ALU operation control
+    output wire [63:0] alu_result,      // ALU result
     output reg [63:0] mem_address,      // Memory address for load/store
     output reg [63:0] mem_write_data,   // Data to write to memory
     output reg branch_taken,            // Branch taken signal
@@ -685,44 +739,53 @@ module execute(
     output reg reg_write_out,           // Register write signal (passed to MEM stage)
     output reg [4:0] rd_addr_out        // Destination register address (passed to MEM stage)
 );
-    // Instantiate the ALU
+    // ALU source selection
+    wire [63:0] alu_operand2 = alu_src ? imm : rs2_data;
 
+    // Instantiate the ALU
     alu_64bit alu(
         .funct3(funct3),
         .funct7(funct7),
         .a(rs1_data),
-        .b((funct3 == 3'b000 || funct3 == 3'b001 || funct3 == 3'b010 || funct3 == 3'b011 || funct3 == 3'b100 || funct3 == 3'b101 || funct3 == 3'b110 || funct3 == 3'b111) ? rs2_data : imm), // Use rs2_data for R-type, imm for I-type
+        .b(alu_operand2),
         .result(alu_result)
     );
 
+    // Initialize branch and jump signals
     initial begin 
         branch_taken = 1'b0;
         jump_target = 64'b0;
     end
 
-   always @(*) begin
-    branch_taken = 1'b0; // Default to not taken
-    jump_target = 64'b0; // Default to no jump
+    // Handle branching and jumping
+    always @(*) begin
+        branch_taken = 1'b0;
+        jump_target = 64'b0;
 
-    // Branch instructions (B-type)
-    case (funct3)
-        3'b000: branch_taken = (rs1_data == rs2_data); // BEQ
-        3'b001: branch_taken = (rs1_data != rs2_data); // BNE
-        3'b100: branch_taken = ($signed(rs1_data) < $signed(rs2_data)); // BLT
-        3'b101: branch_taken = ($signed(rs1_data) >= $signed(rs2_data)); // BGE
-        3'b110: branch_taken = (rs1_data < rs2_data); // BLTU
-        3'b111: branch_taken = (rs1_data >= rs2_data); // BGEU
-    endcase
+        // Branch instructions (B-type)
+        if (branch) begin
+            case (funct3)
+                3'b000: branch_taken = (rs1_data == rs2_data); // BEQ
+                3'b001: branch_taken = (rs1_data != rs2_data); // BNE
+                3'b100: branch_taken = ($signed(rs1_data) < $signed(rs2_data)); // BLT
+                3'b101: branch_taken = ($signed(rs1_data) >= $signed(rs2_data)); // BGE
+                3'b110: branch_taken = (rs1_data < rs2_data); // BLTU
+                3'b111: branch_taken = (rs1_data >= rs2_data); // BGEU
+            endcase
+        end
 
-    // Jump instructions (JAL, JALR)
-    if (funct3 == 3'b000 && funct7 == 7'b0000000) begin // JAL
-        jump_target = pc_in + imm;
-        branch_taken = 1'b1;
-    end else if (funct3 == 3'b000 && funct7 == 7'b0000001) begin // JALR
-        jump_target = rs1_data + imm;
-        branch_taken = 1'b1;
+        // Jump instructions (JAL, JALR)
+        if (jump) begin
+            if (opcode == 7'b1101111) begin // JAL
+                jump_target = pc_in + imm;
+                branch_taken = 1'b1;
+            end else if (opcode == 7'b1100111 && funct3 == 3'b000) begin // JALR
+                jump_target = rs1_data + imm;
+                branch_taken = 1'b1;
+            end
+        end
     end
-end
+
     // Handle memory address calculation and data preparation
     always @(*) begin
         mem_address = rs1_data + imm; // Base address + offset
@@ -964,54 +1027,186 @@ endmodule
 
 
 
-
-
-
-
 module riscv_processor(
     input clk,                          // Clock signal
     input rst                           // Reset signal
 );
-    // Pipeline registers
-    wire [63:0] if_pc;  // Added separate PC for fetch output
-    wire [63:0] if_id_pc;
-    wire [31:0] if_instruction; // Added separate instruction for fetch output
-    wire [31:0] if_id_instruction;
-    wire if_instruction_valid; // Added separate valid signal for fetch output
-    wire if_id_instruction_valid;
+    // Pipeline registers - Fetch stage outputs
+    wire [63:0] if_pc;                  // PC from fetch stage
+    wire [31:0] if_instruction;         // Instruction from fetch stage
+    wire if_instruction_valid;          // Instruction valid signal from fetch stage
     
-    wire [63:0] id_ex_pc, id_ex_rs1_data, id_ex_rs2_data, id_ex_imm, id_ex_branch_target;
-    wire id_ex_mem_read, id_ex_mem_write, id_ex_reg_write;
-    wire [4:0] id_ex_rs1_addr, id_ex_rs2_addr, id_ex_rd_addr;
-    wire [2:0] id_ex_funct3;
-    wire [6:0] id_ex_funct7;
+    // IF/ID pipeline register outputs
+    wire [63:0] if_id_pc;               // PC from IF/ID register
+    wire [31:0] if_id_instruction;      // Instruction from IF/ID register
+    wire if_id_instruction_valid;       // Instruction valid from IF/ID register
     
-    wire [63:0] ex_mem_alu_result, ex_mem_mem_address, ex_mem_mem_write_data, ex_mem_jump_target;
-    wire ex_mem_branch_taken, ex_mem_reg_write;
-    wire [4:0] ex_mem_rd_addr;
-    wire [2:0] ex_mem_funct3; // Added to pass funct3 through to memory stage
-    wire [6:0] ex_mem_funct7; // Added to pass funct3 through to memory stage
+    // Decode stage outputs
+    wire [63:0] id_rs1_data, id_rs2_data, id_imm, id_branch_target;
+    wire id_mem_read, id_mem_write, id_reg_write;
+    wire [4:0] id_rs1_addr, id_rs2_addr, id_rd_addr;
+    wire [2:0] id_funct3;
+    wire [6:0] id_funct7;
     
-    wire [63:0] mem_wb_mem_result;
-    wire mem_wb_reg_write;
-    wire [4:0] mem_wb_rd_addr;
+    // ID/EX pipeline register outputs
+    wire [63:0] id_ex_pc;               // PC from ID/EX register
+    wire [63:0] id_ex_rs1_data;         // RS1 data from ID/EX register
+    wire [63:0] id_ex_rs2_data;         // RS2 data from ID/EX register
+    wire [63:0] id_ex_imm;              // Immediate value from ID/EX register
+    wire [63:0] id_ex_branch_target;    // Branch target from ID/EX register
+    wire id_ex_mem_read;                // Memory read signal from ID/EX register
+    wire id_ex_mem_write;               // Memory write signal from ID/EX register
+    wire id_ex_reg_write;               // Register write signal from ID/EX register
+    wire [4:0] id_ex_rs1_addr;          // RS1 address from ID/EX register
+    wire [4:0] id_ex_rs2_addr;          // RS2 address from ID/EX register
+    wire [4:0] id_ex_rd_addr;           // RD address from ID/EX register
+    wire [2:0] id_ex_funct3;            // Function3 from ID/EX register
+    wire [6:0] id_ex_funct7;            // Function7 from ID/EX register
+    
+    // Execute stage outputs
+    wire [63:0] ex_alu_result;          // ALU result from execute stage
+    wire [63:0] ex_mem_address;         // Memory address from execute stage
+    wire [63:0] ex_mem_write_data;      // Memory write data from execute stage
+    wire ex_branch_taken;               // Branch taken signal from execute stage
+    wire [63:0] ex_branch_target;       // Branch target from execute stage
+    wire ex_reg_write;                  // Register write signal from execute stage
+    wire [4:0] ex_rd_addr;              // Destination register from execute stage
+    
+    // EX/MEM pipeline register outputs
+    wire [63:0] ex_mem_alu_result;      // ALU result from EX/MEM register
+    wire [63:0] ex_mem_mem_address;     // Memory address from EX/MEM register
+    wire [63:0] ex_mem_mem_write_data;  // Memory write data from EX/MEM register
+    wire ex_mem_branch_taken;           // Branch taken from EX/MEM register
+    wire [63:0] ex_mem_branch_target;   // Branch target from EX/MEM register
+    wire ex_mem_reg_write;              // Register write from EX/MEM register
+    wire [4:0] ex_mem_rd_addr;          // Destination register from EX/MEM register
+    wire [2:0] ex_mem_funct3;           // Function3 from EX/MEM register
+    
+    // Memory stage outputs
+    wire [63:0] mem_result;             // Result from memory stage
+    wire mem_reg_write;                 // Register write from memory stage
+    wire [4:0] mem_rd_addr;             // Destination register from memory stage
+    
+    // MEM/WB pipeline register outputs
+    wire [63:0] mem_wb_mem_result;      // Memory result from MEM/WB register
+    wire mem_wb_reg_write;              // Register write from MEM/WB register
+    wire [4:0] mem_wb_rd_addr;          // Destination register from MEM/WB register
     
     // Writeback outputs
-    wire [63:0] write_back_data;
-    wire [4:0] write_back_addr;
-    wire write_back_enable;
-
+    wire [63:0] write_back_data;        // Data to write back to register file
+    wire [4:0] write_back_addr;         // Address to write back to register file
+    wire write_back_enable;             // Write enable for register file
+    
     // Control signals
-    wire stall, flush;
-    wire [63:0] branch_target;
-    wire branch_taken;
-
-        // Create separate wire declarations for branch signals at module top level
-    wire execute_branch_taken;       // Branch taken signal from execute stage
-    wire [63:0] execute_branch_target; // Branch target from execute stage
-    wire [63:0] ex_mem_branch_target;  // Branch target from EX/MEM register
-
-    // Update the execute stage instance to use these new signals
+    wire stall;                         // Stall signal from hazard detection unit
+    wire flush;                         // Flush signal for pipeline registers
+    
+    // Branch control signals (from EX/MEM to fetch)
+    wire branch_taken;                  // Branch taken signal to fetch stage
+    wire [63:0] branch_target;          // Branch target to fetch stage
+    
+    // Connect branch control signals from EX/MEM register to fetch stage
+    assign branch_taken = ex_mem_branch_taken;
+    assign branch_target = ex_mem_branch_target;
+    
+    // Generate flush signal when branch is taken
+    assign flush = branch_taken;
+    
+    // Instantiate the Hazard Detection Unit
+    hazard_detection_unit hdu(
+        .id_ex_rs1_addr(id_ex_rs1_addr),
+        .id_ex_rs2_addr(id_ex_rs2_addr),
+        .ex_mem_rd_addr(ex_mem_rd_addr),
+        .mem_wb_rd_addr(mem_wb_rd_addr),
+        .id_ex_mem_read(id_ex_mem_read),
+        .stall(stall)
+    );
+    
+    // Instantiate the Fetch stage
+    fetch fetch_stage(
+        .clk(clk),
+        .rst(rst),
+        .stall(stall),
+        .branch_target(branch_target),
+        .branch_taken(branch_taken),
+        .pc(if_pc),
+        .instruction(if_instruction),
+        .instruction_valid(if_instruction_valid)
+    );
+    
+    // Instantiate the IF/ID Pipeline Register
+    IF_ID if_id_register(
+        .clk(clk),
+        .rst(rst),
+        .stall(stall),
+        .flush(flush),
+        .pc_in(if_pc),
+        .instruction_in(if_instruction),
+        .instruction_valid_in(if_instruction_valid),
+        .pc_out(if_id_pc),
+        .instruction_out(if_id_instruction),
+        .instruction_valid_out(if_id_instruction_valid)
+    );
+    
+    // Instantiate the Decode stage
+    decode decode_stage(
+        .clk(clk),
+        .rst(rst),
+        .instruction(if_id_instruction),
+        .pc(if_id_pc),
+        .instruction_valid(if_id_instruction_valid),
+        .reg_write_back(write_back_enable),
+        .write_back_addr(write_back_addr),
+        .write_back_data(write_back_data),
+        .rs1_data(id_rs1_data),              // Fixed output connection
+        .rs2_data(id_rs2_data),              // Fixed output connection
+        .imm(id_imm),                        // Fixed output connection
+        .branch_target(id_branch_target),    // Fixed output connection
+        .mem_read(id_mem_read),              // Fixed output connection
+        .mem_write(id_mem_write),            // Fixed output connection
+        .reg_write(id_reg_write),            // Fixed output connection
+        .rs1_addr(id_rs1_addr),              // Fixed output connection
+        .rs2_addr(id_rs2_addr),              // Fixed output connection
+        .rd_addr(id_rd_addr),                // Fixed output connection
+        .funct3(id_funct3),                  // Fixed output connection
+        .funct7(id_funct7)                   // Fixed output connection
+    );
+    
+    // Instantiate the ID/EX Pipeline Register
+    id_ex_register id_ex_registerr(
+        .clk(clk),
+        .rst(rst),
+        .stall(stall),
+        .flush(flush),
+        .pc_in(if_id_pc),
+        .rs1_data_in(id_rs1_data),           // Fixed input connection
+        .rs2_data_in(id_rs2_data),           // Fixed input connection
+        .imm_in(id_imm),                     // Fixed input connection
+        .branch_target_in(id_branch_target), // Fixed input connection
+        .mem_read_in(id_mem_read),           // Fixed input connection
+        .mem_write_in(id_mem_write),         // Fixed input connection
+        .reg_write_in(id_reg_write),         // Fixed input connection
+        .rs1_addr_in(id_rs1_addr),           // Fixed input connection
+        .rs2_addr_in(id_rs2_addr),           // Fixed input connection
+        .rd_addr_in(id_rd_addr),             // Fixed input connection
+        .funct3_in(id_funct3),               // Fixed input connection
+        .funct7_in(id_funct7),               // Fixed input connection
+        .pc_out(id_ex_pc),
+        .rs1_data_out(id_ex_rs1_data),
+        .rs2_data_out(id_ex_rs2_data),
+        .imm_out(id_ex_imm),
+        .branch_target_out(id_ex_branch_target),
+        .mem_read_out(id_ex_mem_read),
+        .mem_write_out(id_ex_mem_write),
+        .reg_write_out(id_ex_reg_write),
+        .rs1_addr_out(id_ex_rs1_addr),
+        .rs2_addr_out(id_ex_rs2_addr),
+        .rd_addr_out(id_ex_rd_addr),
+        .funct3_out(id_ex_funct3),
+        .funct7_out(id_ex_funct7)
+    );
+    
+    // Update the execute stage instance with the fixed connections
     execute execute_stage(
         .clk(clk),
         .rst(rst),
@@ -1028,143 +1223,42 @@ module riscv_processor(
         .rd_addr(id_ex_rd_addr),
         .funct3(id_ex_funct3),
         .funct7(id_ex_funct7),
-        .alu_result(ex_mem_alu_result),
-        .mem_address(ex_mem_mem_address),
-        .mem_write_data(ex_mem_mem_write_data),
-        .branch_taken(execute_branch_taken),      // Use the new signal
-        .jump_target(execute_branch_target),      // Use the new signal
-        .reg_write_out(ex_mem_reg_write),
-        .rd_addr_out(ex_mem_rd_addr)
+        .alu_result(ex_alu_result),           // Fixed output connection
+        .mem_address(ex_mem_address),         // Fixed output connection
+        .mem_write_data(ex_mem_write_data),   // Fixed output connection
+        .branch_taken(ex_branch_taken),       // Fixed output connection
+        .jump_target(ex_branch_target),       // Fixed output connection
+        .reg_write_out(ex_reg_write),         // Fixed output connection
+        .rd_addr_out(ex_rd_addr)              // Fixed output connection
     );
-
-    // Update the EX/MEM register instance
+    
+    // Pass funct3 directly from ID/EX to EX/MEM
+    // This assumes execute stage doesn't change funct3
+    
+    // Update the EX/MEM register instance with the fixed connections
     ex_mem_register ex_mem_register(
         .clk(clk),
         .rst(rst),
         .stall(stall),
         .flush(flush),
-        .alu_result_in(ex_mem_alu_result),
-        .mem_address_in(ex_mem_mem_address),
-        .mem_write_data_in(ex_mem_mem_write_data),
-        .branch_taken_in(execute_branch_taken),   // Use the new signal
-        .jump_target_in(execute_branch_target),   // Use the new signal
-        .reg_write_in(ex_mem_reg_write),
-        .rd_addr_in(ex_mem_rd_addr),
-        .funct3_in(ex_mem_funct3),
+        .alu_result_in(ex_alu_result),        // Fixed input connection
+        .mem_address_in(ex_mem_address),      // Fixed input connection
+        .mem_write_data_in(ex_mem_write_data),// Fixed input connection
+        .branch_taken_in(ex_branch_taken),    // Fixed input connection
+        .jump_target_in(ex_branch_target),    // Fixed input connection
+        .reg_write_in(ex_reg_write),          // Fixed input connection
+        .rd_addr_in(ex_rd_addr),              // Fixed input connection
+        .funct3_in(id_ex_funct3),             // Direct connection from ID/EX
         .alu_result_out(ex_mem_alu_result),
         .mem_address_out(ex_mem_mem_address),
         .mem_write_data_out(ex_mem_mem_write_data),
-        .branch_taken_out(ex_mem_branch_taken),   // Use the new signal
-        .jump_target_out(ex_mem_branch_target),   // Use the new signal
+        .branch_taken_out(ex_mem_branch_taken),
+        .jump_target_out(ex_mem_branch_target),
         .reg_write_out(ex_mem_reg_write),
         .rd_addr_out(ex_mem_rd_addr),
         .funct3_out(ex_mem_funct3)
     );
-
-    // Then assign the branch control signals clearly
-    assign branch_taken = ex_mem_branch_taken;
-    assign branch_target = ex_mem_branch_target;
-    assign flush = branch_taken;
-
-    // Instantiate the Hazard Detection Unit
-    hazard_detection_unit hdu(
-        .id_ex_rs1_addr(id_ex_rs1_addr),
-        .id_ex_rs2_addr(id_ex_rs2_addr),
-        .ex_mem_rd_addr(ex_mem_rd_addr),
-        .mem_wb_rd_addr(mem_wb_rd_addr),
-        .id_ex_mem_read(id_ex_mem_read),
-        .stall(stall)
-    );
-
-    // Instantiate the Fetch stage
-    fetch fetch_stage(
-        .clk(clk),
-        .rst(rst),
-        .stall(stall),
-        .branch_target(branch_target),
-        .branch_taken(branch_taken),
-        .pc(if_pc),                      // Fixed: separate output signal
-        .instruction(if_instruction),    // Fixed: use 32-bit signal
-        .instruction_valid(if_instruction_valid) // Fixed: separate output signal
-    );
-
-    // Instantiate the IF/ID Pipeline Register
-    IF_ID if_id_register(
-        .clk(clk),
-        .rst(rst),
-        .stall(stall),
-        .flush(flush),
-        .pc_in(if_pc),                   // Fixed: use fetch output
-        .instruction_in(if_instruction), // Fixed: use fetch output
-        .instruction_valid_in(if_instruction_valid), // Fixed: use fetch output
-        .pc_out(if_id_pc),               // Fixed: separate output signal
-        .instruction_out(if_id_instruction), // Fixed: separate output signal
-        .instruction_valid_out(if_id_instruction_valid) // Fixed: separate output signal
-    );
-
-    // Instantiate the Decode stage
-    decode decode_stage(
-        .clk(clk),
-        .rst(rst),
-        .instruction(if_id_instruction), // Fixed: use IF/ID output
-        .pc(if_id_pc),                   // Fixed: use IF/ID output
-        .instruction_valid(if_id_instruction_valid), // Fixed: use IF/ID output
-        .reg_write_back(write_back_enable), // Fixed: use writeback output
-        .write_back_addr(write_back_addr),  // Fixed: use writeback output
-        .write_back_data(write_back_data),  // Fixed: use writeback output
-        .rs1_data(id_ex_rs1_data),
-        .rs2_data(id_ex_rs2_data),
-        .imm(id_ex_imm),
-        .branch_target(id_ex_branch_target),
-        .mem_read(id_ex_mem_read),
-        .mem_write(id_ex_mem_write),
-        .reg_write(id_ex_reg_write),
-        .rs1_addr(id_ex_rs1_addr),
-        .rs2_addr(id_ex_rs2_addr),
-        .rd_addr(id_ex_rd_addr),
-        .funct3(id_ex_funct3),
-        .funct7(id_ex_funct7)
-    );
-
-    // Instantiate the ID/EX Pipeline Register
-    id_ex_register id_ex_registerr(
-        .clk(clk),
-        .rst(rst),
-        .stall(stall),
-        .flush(flush),
-        .pc_in(if_id_pc),
-        .rs1_data_in(id_ex_rs1_data),
-        .rs2_data_in(id_ex_rs2_data),
-        .imm_in(id_ex_imm),
-        .branch_target_in(id_ex_branch_target),
-        .mem_read_in(id_ex_mem_read),
-        .mem_write_in(id_ex_mem_write),
-        .reg_write_in(id_ex_reg_write),
-        .rs1_addr_in(id_ex_rs1_addr),
-        .rs2_addr_in(id_ex_rs2_addr),
-        .rd_addr_in(id_ex_rd_addr),
-        .funct3_in(id_ex_funct3),
-        .funct7_in(id_ex_funct7),
-        .pc_out(id_ex_pc),
-        .rs1_data_out(id_ex_rs1_data),
-        .rs2_data_out(id_ex_rs2_data),
-        .imm_out(id_ex_imm),
-        .branch_target_out(id_ex_branch_target),
-        .mem_read_out(id_ex_mem_read),
-        .mem_write_out(id_ex_mem_write),
-        .reg_write_out(id_ex_reg_write),
-        .rs1_addr_out(id_ex_rs1_addr),
-        .rs2_addr_out(id_ex_rs2_addr),
-        .rd_addr_out(id_ex_rd_addr),
-        .funct3_out(id_ex_funct3),
-        .funct7_out(id_ex_funct7)
-    );
-
     
-    // Pass funct3 from ID/EX to EX/MEM (added)
-    assign ex_mem_funct3 = id_ex_funct3;
-    assign ex_mem_funct7 = id_ex_funct7;
-
     // Instantiate the Memory stage
     memory memory_stage(
         .clk(clk),
@@ -1173,42 +1267,38 @@ module riscv_processor(
         .mem_address(ex_mem_mem_address),
         .mem_write_data(ex_mem_mem_write_data),
         .branch_taken(ex_mem_branch_taken),
-        .jump_target(ex_mem_jump_target),
+        .jump_target(ex_mem_branch_target),   // Fixed to use branch_target for consistency
         .reg_write(ex_mem_reg_write),
         .rd_addr(ex_mem_rd_addr),
-        .funct3(ex_mem_funct3),           // Fixed: use ex_mem_funct3 instead
-        .mem_read_data(mem_wb_mem_result), // Temporary wire
-        .mem_result(mem_wb_mem_result),
-        .reg_write_out(mem_wb_reg_write),
-        .rd_addr_out(mem_wb_rd_addr)
+        .funct3(ex_mem_funct3),
+        .mem_read_data(mem_result),           // Fixed: separate from mem_result
+        .mem_result(mem_result),              // Fixed output connection
+        .reg_write_out(mem_reg_write),        // Fixed output connection
+        .rd_addr_out(mem_rd_addr)             // Fixed output connection
     );
-
+    
     // Instantiate the MEM/WB Pipeline Register
     mem_wb_register mem_wb_register(
         .clk(clk),
         .rst(rst),
         .stall(stall),
         .flush(flush),
-        .mem_result_in(mem_wb_mem_result),
-        .reg_write_in(mem_wb_reg_write),
-        .rd_addr_in(mem_wb_rd_addr),
+        .mem_result_in(mem_result),           // Fixed input connection
+        .reg_write_in(mem_reg_write),         // Fixed input connection
+        .rd_addr_in(mem_rd_addr),             // Fixed input connection
         .mem_result_out(mem_wb_mem_result),
         .reg_write_out(mem_wb_reg_write),
         .rd_addr_out(mem_wb_rd_addr)
     );
-
+    
     // Instantiate the Writeback stage
     writeback writeback_stage(
         .mem_result(mem_wb_mem_result),
         .reg_write(mem_wb_reg_write),
         .rd_addr(mem_wb_rd_addr),
-        .write_back_data(write_back_data),    // Fixed: Output to decode stage
-        .write_back_addr(write_back_addr),    // Fixed: Output to decode stage
-        .reg_write_back(write_back_enable)    // Fixed: Output to decode stage
+        .write_back_data(write_back_data),
+        .write_back_addr(write_back_addr),
+        .reg_write_back(write_back_enable)
     );
 
 endmodule
-
-
-
-
