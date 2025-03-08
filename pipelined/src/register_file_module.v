@@ -73,7 +73,7 @@ module instruction_memory(
 
 
     
-    assign instruction = mem[pc[9:0]>>2]; 
+    assign instruction = mem[pc[11:2]]; 
 
     
 endmodule
