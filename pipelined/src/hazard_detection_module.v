@@ -11,12 +11,12 @@ module hazard_detection_unit(
         stall = 1'b0;
     end
 
-    always @(*) begin
+    // always @(*) begin
         
-        if (id_ex_mem_read && ((id_ex_rs1_addr == ex_mem_rd_addr) || (id_ex_rs2_addr == ex_mem_rd_addr))) begin
-            stall = 1'b1;
-        end else begin
-            stall = 1'b0;
-        end
-    end
+    //     if (id_ex_mem_read && ((id_ex_rs1_addr == ex_mem_rd_addr) || (id_ex_rs2_addr == ex_mem_rd_addr))) begin
+    //         stall = 1'b1;
+    //     end else begin
+    //         stall = 1'b0;
+    //     end
+    // end
 endmodule

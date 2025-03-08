@@ -1,6 +1,3 @@
-//Pipeline processor Wrapper
-
-
 module riscv_processor(
     input clk,                          
     input rst                           
@@ -51,6 +48,11 @@ module riscv_processor(
     wire [63:0] ex_jump_target;       
     wire ex_reg_write;                  
     wire [4:0] ex_rd_addr;              
+    wire ex_mem_read;                   // New signal for memory read
+    wire ex_mem_write;                  // New signal for memory write
+    wire [2:0] ex_funct3;               // New signal for funct3
+    wire [6:0] ex_funct7;               // New signal for funct7
+    wire ex_mem_to_reg;                 // New signal for mem_to_reg
     
     // EX/MEM pipeline register signals
     wire [63:0] ex_mem_alu_result;      
@@ -60,19 +62,24 @@ module riscv_processor(
     wire [63:0] ex_mem_jump_target;   
     wire ex_mem_reg_write;              
     wire [4:0] ex_mem_rd_addr;          
-    wire [2:0] ex_mem_funct3;
-    wire [6:0] ex_mem_funct7;           
+    wire [2:0] ex_mem_funct3;           // New signal for funct3
+    wire [6:0] ex_mem_funct7;           // New signal for funct7
+    wire ex_mem_mem_read;               // New signal for memory read
+    wire ex_mem_mem_write;              // New signal for memory write
+    wire ex_mem_mem_to_reg;             // New signal for mem_to_reg
     
     // MEM stage signals
     wire [63:0] mem_read_data;
     wire [63:0] mem_result;             
     wire mem_reg_write;                 
     wire [4:0] mem_rd_addr;             
+    wire mem_mem_to_reg;                // New signal for mem_to_reg
     
     // MEM/WB pipeline register signals
     wire [63:0] mem_wb_mem_result;      
     wire mem_wb_reg_write;              
     wire [4:0] mem_wb_rd_addr;          
+    wire mem_wb_mem_to_reg;             // New signal for mem_to_reg
     
     // WB stage signals
     wire [63:0] write_back_data;        
@@ -232,7 +239,12 @@ module riscv_processor(
         .branch_taken(ex_branch_taken),       
         .jump_target(ex_jump_target),       
         .reg_write_out(ex_reg_write),         
-        .rd_addr_out(ex_rd_addr)
+        .rd_addr_out(ex_rd_addr),
+        .mem_read_out(ex_mem_read),           // New signal for memory read
+        .mem_write_out(ex_mem_write),         // New signal for memory write
+        .funct3_out(ex_funct3),               // New signal for funct3
+        .funct7_out(ex_funct7),               // New signal for funct7
+        .mem_to_reg_out(ex_mem_to_reg)        // New signal for mem_to_reg
     );
     
     // EX/MEM pipeline register
@@ -248,8 +260,11 @@ module riscv_processor(
         .jump_target_in(ex_jump_target),    
         .reg_write_in(ex_reg_write),          
         .rd_addr_in(ex_rd_addr),              
-        .funct3_in(id_ex_funct3),
-        .funct7_in(id_ex_funct7),             
+        .funct3_in(ex_funct3),                // New signal for funct3
+        .funct7_in(ex_funct7),                // New signal for funct7
+        .mem_read_in(ex_mem_read),            // New signal for memory read
+        .mem_write_in(ex_mem_write),          // New signal for memory write
+        .mem_to_reg_in(ex_mem_to_reg),        // New signal for mem_to_reg
         .alu_result_out(ex_mem_alu_result),
         .mem_address_out(ex_mem_mem_address),
         .mem_write_data_out(ex_mem_mem_write_data),
@@ -257,8 +272,11 @@ module riscv_processor(
         .jump_target_out(ex_mem_jump_target),
         .reg_write_out(ex_mem_reg_write),
         .rd_addr_out(ex_mem_rd_addr),
-        .funct3_out(ex_mem_funct3),
-        .funct7_out(ex_mem_funct7)
+        .funct3_out(ex_mem_funct3),           // New signal for funct3
+        .funct7_out(ex_mem_funct7),           // New signal for funct7
+        .mem_read_out(ex_mem_mem_read),       // New signal for memory read
+        .mem_write_out(ex_mem_mem_write),     // New signal for memory write
+        .mem_to_reg_out(ex_mem_mem_to_reg)    // New signal for mem_to_reg
     );
     
     // Memory stage
@@ -273,10 +291,14 @@ module riscv_processor(
         .reg_write(ex_mem_reg_write),
         .rd_addr(ex_mem_rd_addr),
         .funct3(ex_mem_funct3),
+        .mem_read(ex_mem_mem_read),           // New signal for memory read
+        .mem_write(ex_mem_mem_write),         // New signal for memory write
+        .mem_to_reg(ex_mem_mem_to_reg),       // New signal for mem_to_reg
         .mem_read_data(mem_read_data),           
         .mem_result(mem_result),              
         .reg_write_out(mem_reg_write),        
-        .rd_addr_out(mem_rd_addr)             
+        .rd_addr_out(mem_rd_addr),
+        .mem_to_reg_out(mem_mem_to_reg)       // New signal for mem_to_reg
     );
     
     // MEM/WB pipeline register
@@ -288,9 +310,11 @@ module riscv_processor(
         .mem_result_in(mem_result),           
         .reg_write_in(mem_reg_write),         
         .rd_addr_in(mem_rd_addr),             
+        .mem_to_reg_in(mem_mem_to_reg),       // New signal for mem_to_reg
         .mem_result_out(mem_wb_mem_result),
         .reg_write_out(mem_wb_reg_write),
-        .rd_addr_out(mem_wb_rd_addr)
+        .rd_addr_out(mem_wb_rd_addr),
+        .mem_to_reg_out(mem_wb_mem_to_reg)    // New signal for mem_to_reg
     );
     
     // Writeback stage
@@ -298,6 +322,7 @@ module riscv_processor(
         .mem_result(mem_wb_mem_result),
         .reg_write(mem_wb_reg_write),
         .rd_addr(mem_wb_rd_addr),
+        .mem_to_reg(mem_wb_mem_to_reg),       // New signal for mem_to_reg
         .write_back_data(write_back_data),
         .write_back_addr(write_back_addr),
         .reg_write_back(write_back_enable)

@@ -99,12 +99,12 @@ module data_memory(
     end
 
     
-    assign read_data = (mem_read) ? mem[address[9:0]] : 64'b0;
+    assign read_data = (mem_read) ? mem[address[9:0] >> 2] : 64'b0; // For 64-bit words;
 
     
     always @(posedge clk) begin
         if (mem_write) begin
-            mem[address[9:0]] <= write_data;
+            mem[address[9:0]>>2] <= write_data;
         end
     end
 endmodule
