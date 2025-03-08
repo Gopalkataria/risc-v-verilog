@@ -26,7 +26,7 @@ module decode(
     output mem_to_reg,
     output [1:0] alu_op
 );
-    // Instruction field extraction
+    
     assign opcode = instruction[6:0];
     assign rs1_addr = instruction[19:15];
     assign rs2_addr = instruction[24:20];
@@ -34,7 +34,7 @@ module decode(
     assign funct3 = instruction[14:12];
     assign funct7 = instruction[31:25];
 
-    // Register file instantiation
+    
     register_file reg_file(
         .clk(clk),
         .rst(rst),
@@ -47,71 +47,71 @@ module decode(
         .rs2_data(rs2_data)
     );
 
-    // Immediate value generation for different instruction formats
+    
     wire [63:0] imm_i = {{52{instruction[31]}}, instruction[31:20]};
     wire [63:0] imm_s = {{52{instruction[31]}}, instruction[31:25], instruction[11:7]};
     wire [63:0] imm_b = {{51{instruction[31]}}, instruction[31], instruction[7], instruction[30:25], instruction[11:8], 1'b0};
-    wire [63:0] imm_u = {{32{instruction[31]}}, instruction[31:12], 12'b0}; // Fixed: Sign extension for upper immediates
+    wire [63:0] imm_u = {{32{instruction[31]}}, instruction[31:12], 12'b0}; 
     wire [63:0] imm_j = {{43{instruction[31]}}, instruction[31], instruction[19:12], instruction[20], instruction[30:21], 1'b0};
 
-    // Immediate value selection based on instruction type
+    
     reg [63:0] imm_reg;
     always @(*) begin
         case (opcode)
-            7'b0000011: imm_reg = imm_i; // Load instructions (I-type)
-            7'b0010011: imm_reg = imm_i; // I-type ALU operations
-            7'b0100011: imm_reg = imm_s; // Store instructions (S-type)
-            7'b1100011: imm_reg = imm_b; // Branch instructions (B-type)
-            7'b0110111: imm_reg = imm_u; // LUI (U-type)
-            7'b0010111: imm_reg = imm_u; // AUIPC (U-type)
-            7'b1101111: imm_reg = imm_j; // JAL (J-type)
-            7'b1100111: imm_reg = imm_i; // JALR (I-type)
+            7'b0000011: imm_reg = imm_i; 
+            7'b0010011: imm_reg = imm_i; 
+            7'b0100011: imm_reg = imm_s; 
+            7'b1100011: imm_reg = imm_b; 
+            7'b0110111: imm_reg = imm_u; 
+            7'b0010111: imm_reg = imm_u; 
+            7'b1101111: imm_reg = imm_j; 
+            7'b1100111: imm_reg = imm_i; 
             default:    imm_reg = 64'b0;
         endcase
     end
     assign imm = imm_reg;
 
-    // Branch target calculation
+    
     assign branch_target = pc + imm;
 
-    // Control signals generation based on opcode
+    
     assign mem_read = (opcode == 7'b0000011) && instruction_valid;
     assign mem_write = (opcode == 7'b0100011) && instruction_valid;
     
-    // Fixed reg_write: Added JALR (1100111)
-    assign reg_write = ((opcode == 7'b0110011) || // R-type
-                        (opcode == 7'b0010011) || // I-type ALU
-                        (opcode == 7'b0000011) || // Load
-                        (opcode == 7'b1101111) || // JAL
-                        (opcode == 7'b1100111) || // JALR
-                        (opcode == 7'b0110111) || // LUI
-                        (opcode == 7'b0010111))   // AUIPC
+    
+    assign reg_write = ((opcode == 7'b0110011) || 
+                        (opcode == 7'b0010011) || 
+                        (opcode == 7'b0000011) || 
+                        (opcode == 7'b1101111) || 
+                        (opcode == 7'b1100111) || 
+                        (opcode == 7'b0110111) || 
+                        (opcode == 7'b0010111))   
                         && instruction_valid;
     
-    // Fixed alu_src: Added JALR and LUI
-    assign alu_src = (opcode == 7'b0010011) || // I-type ALU
-                     (opcode == 7'b0100011) || // Store
-                     (opcode == 7'b0000011) || // Load
-                     (opcode == 7'b1100111) || // JALR
-                     (opcode == 7'b0110111) || // LUI
-                     (opcode == 7'b0010111);   // AUIPC
     
-    // Branch and jump signal generation
-    assign branch = (opcode == 7'b1100011) && instruction_valid; // Branch instructions
-    assign jump = ((opcode == 7'b1101111) || // JAL
-                  (opcode == 7'b1100111))    // JALR
+    assign alu_src = (opcode == 7'b0010011) || 
+                     (opcode == 7'b0100011) || 
+                     (opcode == 7'b0000011) || 
+                     (opcode == 7'b1100111) || 
+                     (opcode == 7'b0110111) || 
+                     (opcode == 7'b0010111);   
+    
+    
+    assign branch = (opcode == 7'b1100011) && instruction_valid; 
+    assign jump = ((opcode == 7'b1101111) || 
+                  (opcode == 7'b1100111))    
                   && instruction_valid;
     
-    // Memory to register signal for load instructions
+    
     assign mem_to_reg = (opcode == 7'b0000011) && instruction_valid;
     
-    // ALU operation type selection
-    // Fixed alu_op to include more operations and handle JALR
-    assign alu_op = (opcode == 7'b0110011) ? 2'b10 : // R-type
-                   (opcode == 7'b0010011) ? 2'b11 :  // I-type ALU
-                   (opcode == 7'b1100011) ? 2'b01 :  // Branch
-                   (opcode == 7'b1100111) ? 2'b00 :  // JALR
-                   2'b00;                            // Default (add)
+    
+    
+    assign alu_op = (opcode == 7'b0110011) ? 2'b10 : 
+                   (opcode == 7'b0010011) ? 2'b11 :  
+                   (opcode == 7'b1100011) ? 2'b01 :  
+                   (opcode == 7'b1100111) ? 2'b00 :  
+                   2'b00;                            
 
 endmodule
 

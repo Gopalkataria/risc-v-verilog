@@ -11,10 +11,10 @@ module register_file(
 );
     reg [63:0] registers [0:31];        
 
-    // rs1_data = 64'b0;
-    // rs2_data = 64'b0;
+    
+    
 
-    // Reset logic moved inside always block
+    
             integer i;
     always @(posedge clk or posedge rst) begin
         if (rst) begin
@@ -26,15 +26,15 @@ module register_file(
         end
     end
 
-    // Read ports
+    
     always @(*) begin
-        // rs1_data = 64'b1010101001010100101100101001;
-        // rs2_data = 64'b1010101001010100101100101001;
+        
+        
         rs1_data = (rs1_addr == 5'b0) ? 64'b0 : registers[rs1_addr];
         rs2_data = (rs2_addr == 5'b0) ? 64'b0 : registers[rs2_addr];
     end
 
-    // Debugging signals
+    
     wire [63:0] r1_debug = registers[1];
     wire [63:0] r2_debug = registers[2];
     wire [63:0] r3_debug = registers[3];

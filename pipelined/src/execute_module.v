@@ -27,10 +27,10 @@ module execute(
     output wire reg_write_out,
     output wire [4:0] rd_addr_out
 );
-    // ALU operand selection
+    
     wire [63:0] alu_operand2 = alu_src ? imm : rs2_data;
     
-    // ALU instantiation
+    
     alu_64bit alu(
         .funct3(funct3),
         .funct7(funct7),
@@ -39,24 +39,24 @@ module execute(
         .result(alu_result)
     );
     
-    // Branch condition evaluation
+    
     reg branch_taken_reg;
     always @(*) begin
         branch_taken_reg = 1'b0;
         if (branch) begin
             case (funct3)
-                3'b000: branch_taken_reg = (rs1_data == rs2_data);    // BEQ
-                3'b001: branch_taken_reg = (rs1_data != rs2_data);    // BNE
-                3'b100: branch_taken_reg = ($signed(rs1_data) < $signed(rs2_data));  // BLT
-                3'b101: branch_taken_reg = ($signed(rs1_data) >= $signed(rs2_data)); // BGE
-                3'b110: branch_taken_reg = (rs1_data < rs2_data);     // BLTU
-                3'b111: branch_taken_reg = (rs1_data >= rs2_data);    // BGEU
+                3'b000: branch_taken_reg = (rs1_data == rs2_data);    
+                3'b001: branch_taken_reg = (rs1_data != rs2_data);    
+                3'b100: branch_taken_reg = ($signed(rs1_data) < $signed(rs2_data));  
+                3'b101: branch_taken_reg = ($signed(rs1_data) >= $signed(rs2_data)); 
+                3'b110: branch_taken_reg = (rs1_data < rs2_data);     
+                3'b111: branch_taken_reg = (rs1_data >= rs2_data);    
                 default: branch_taken_reg = 1'b0;
             endcase
         end
     end
     
-    // Jump target calculation
+    
     reg [63:0] jump_target_reg;
     reg jump_taken;
     always @(*) begin
@@ -64,35 +64,35 @@ module execute(
         jump_taken = 1'b0;
         
         if (jump) begin
-            if (opcode == 7'b1101111) begin  // JAL
+            if (opcode == 7'b1101111) begin  
                 jump_target_reg = pc_in + imm;
                 jump_taken = 1'b1;
-            end else if (opcode == 7'b1100111 && funct3 == 3'b000) begin  // JALR
-                jump_target_reg = (rs1_data + imm) & ~64'h1; // Clear LSB as per spec
+            end else if (opcode == 7'b1100111 && funct3 == 3'b000) begin  
+                jump_target_reg = (rs1_data + imm) & ~64'h1; 
                 jump_taken = 1'b1;
             end
         end
     end
     
-    // Memory operations
+    
     reg [63:0] mem_address_reg;
     reg [63:0] mem_write_data_reg;
     
     always @(*) begin
-        // Calculate memory address
+        
         mem_address_reg = rs1_data + imm;
         
-        // Prepare write data based on width
+        
         case (funct3)
-            3'b000: mem_write_data_reg = {56'b0, rs2_data[7:0]};   // SB - Store Byte
-            3'b001: mem_write_data_reg = {48'b0, rs2_data[15:0]};  // SH - Store Halfword
-            3'b010: mem_write_data_reg = {32'b0, rs2_data[31:0]};  // SW - Store Word
-            3'b011: mem_write_data_reg = rs2_data;                 // SD - Store Doubleword
+            3'b000: mem_write_data_reg = {56'b0, rs2_data[7:0]};   
+            3'b001: mem_write_data_reg = {48'b0, rs2_data[15:0]};  
+            3'b010: mem_write_data_reg = {32'b0, rs2_data[31:0]};  
+            3'b011: mem_write_data_reg = rs2_data;                 
             default: mem_write_data_reg = rs2_data;
         endcase
     end
     
-    // Pass through control signals
+    
     reg reg_write_out_reg;
     reg [4:0] rd_addr_out_reg;
     
@@ -101,7 +101,7 @@ module execute(
         rd_addr_out_reg = rd_addr;
     end
     
-    // Connect internal registers to outputs
+    
     assign branch_taken = branch_taken_reg | jump_taken;
     assign jump_target = jump_target_reg;
     assign mem_address = mem_address_reg;
