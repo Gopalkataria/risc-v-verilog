@@ -38,19 +38,19 @@ module RISC_V_CPU_Test;
         // Program to test ALU, Branch, and Jump operations
         
         // 1. Basic ALU operations
-        cpu.fetch_stage.imem.mem[0] = 32'h00100093;  // addi x1, x0, 1    # x1 = 1
-        cpu.fetch_stage.imem.mem[1] = 32'h00300113;  // addi x2, x0, 3    # x2 = 3
-        cpu.fetch_stage.imem.mem[2] = 32'h002081b3;  // add  x3, x1, x2   # x3 = x1 + x2 = 4
-        cpu.fetch_stage.imem.mem[3] = 32'h40208233;  // sub  x4, x1, x2   # x4 = x1 - x2 = -2
-        cpu.fetch_stage.imem.mem[4] = 32'h0020f2b3;  // and  x5, x1, x2   # x5 = x1 & x2 = 1
-        cpu.fetch_stage.imem.mem[5] = 32'h0020e333;  // or   x6, x1, x2   # x6 = x1 | x2 = 3
-        cpu.fetch_stage.imem.mem[6] = 32'h0020c3b3;  // xor  x7, x1, x2   # x7 = x1 ^ x2 = 2
-        cpu.fetch_stage.imem.mem[7] = 32'h00209433;  // sll  x8, x1, x2   # x8 = x1 << x2 = 8
-        cpu.fetch_stage.imem.mem[8] = 32'h0020d4b3;  // srl  x9, x1, x2   # x9 = x1 >> x2 = 0
-        
-        // 2. Immediate operations
-        cpu.fetch_stage.imem.mem[9] = 32'h00a00513;  // addi x10, x0, 10   # x10 = 10
-        cpu.fetch_stage.imem.mem[10] = 32'hfff00593; // addi x11, x0, -1   # x11 = -1
+       cpu.fetch_stage.imem.mem[0] = 32'b00000000101000000000000010010011;   // li x1, 10   -> ADDI x1, x0, 10
+cpu.fetch_stage.imem.mem[1] = 32'b00000001010000000000000100010011;   // li x2, 20   -> ADDI x2, x0, 20
+cpu.fetch_stage.imem.mem[2] = 32'b00000001111000000000000110010011;   // li x3, 30   -> ADDI x3, x0, 30
+cpu.fetch_stage.imem.mem[3] = 32'b00000010101000000000001000010011;   // addi x4, x0, 42  -> ADDI x4, x0, 42
+cpu.fetch_stage.imem.mem[4] = 32'b00000000001000010000001010110011;   // add x5, x1, x2  -> ADD x5, x1, x2
+cpu.fetch_stage.imem.mem[5] = 32'b00000000001000001100001100110011;   // xor x6, x1, x2  -> XOR x6, x1, x2 (Independent instruction)
+cpu.fetch_stage.imem.mem[6] = 32'b01000000001100101000001110110011;   // sub x7, x5, x3  -> SUB x7, x5, x3
+cpu.fetch_stage.imem.mem[7] = 32'b00000000010100101000001010100011;   // sw x5, 0(x8)   -> SW x5, 0(x8)
+
+// 2. Immediate operations
+cpu.fetch_stage.imem.mem[8] = 32'b00000000101000000000001001010011;   // li x9, 10  -> ADDI x9, x0, 10
+cpu.fetch_stage.imem.mem[9] = 32'b00000000000001000000001010000011;  // lw x10, 0(x8)  -> LW x10, 0(x8)
+
         
         // 3. Branch operations - test all branch types
         cpu.fetch_stage.imem.mem[11] = 32'h00c00613; // addi x12, x0, 12   # x12 = 12
