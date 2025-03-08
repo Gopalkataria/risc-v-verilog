@@ -1,7 +1,8 @@
 # Compiler and Simulator
 VLOG = iverilog
 VVP = vvp
-GTKWAVE = gtkwave
+# GTKWAVE = killall gtkwave ; gtkwave
+GTKWAVE = echo 
 
 # Directories
 SRC_DIR = ./src
