@@ -12,7 +12,7 @@ module RISC_V_CPU_Test;
     
     // GTKWave Dump
     initial begin
-        $dumpfile("alu_test.vcd");
+        $dumpfile("stall_flush_test.vcd");
         $dumpvars(0, RISC_V_CPU_Test);
     end
     
