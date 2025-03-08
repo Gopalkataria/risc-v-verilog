@@ -34,6 +34,12 @@ memory_test: $(TEST_DIR)/memory_test.v ./main.v $(SRC_FILES)
 	$(VVP) $(OUT_DIR)/memory_test.out
 	$(GTKWAVE) $(OUT_DIR)/memory_test.vcd &
 
+# stall flush test 
+stall_flush_test: $(TEST_DIR)/stall_flush_test.v ./main.v $(SRC_FILES)
+	$(VLOG) -o $(OUT_DIR)/stall_flush_test.out $(TEST_DIR)/stall_flush_test.v ./main.v $(SRC_FILES)
+	$(VVP) $(OUT_DIR)/stall_flush_test.out
+	$(GTKWAVE) $(OUT_DIR)/stall_flush_test.vcd &
+
 # Clean
 clean:
 	rm -f $(OUT_DIR)/*.out $(OUT_DIR)/*.vcd
