@@ -1,8 +1,8 @@
 # Compiler and Simulator
 VLOG = iverilog
 VVP = vvp
-GTKWAVE = killall gtkwave ; gtkwave
-# GTKWAVE = echo 
+# GTKWAVE = killall gtkwave ; gtkwave
+GTKWAVE = echo 
 
 # Directories
 SRC_DIR = ./src
@@ -36,6 +36,10 @@ stall_flush_test: $(TEST_DIR)/stall_flush_test.v ./main.v $(SRC_FILES)
 	$(VVP) $(OUT_DIR)/stall_flush_test.out
 	$(GTKWAVE) $(OUT_DIR)/stall_flush_test.vcd &
 
+hazard_test: $(TEST_DIR)/hazard_test.v ./main.v $(SRC_FILES)
+	$(VLOG) -o $(OUT_DIR)/hazard_test.out $(TEST_DIR)/hazard_test.v ./main.v $(SRC_FILES)
+	$(VVP) $(OUT_DIR)/hazard_test.out
+	$(GTKWAVE) $(OUT_DIR)/hazard_test.vcd &
 clean:
 	rm -f $(OUT_DIR)/*.out $(OUT_DIR)/*.vcd
 
