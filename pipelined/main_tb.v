@@ -48,7 +48,7 @@ module RISC_V_Pipelined_CPU_TB;
     initial begin
         $display("Time | PC       | Instr    | ALUResult | Reg1 | Reg2 | Reg3 | Reg4 | Branch | Jump");
 
-        $monitor("%3t | %h | %h | %h | %h | %h | %h | %h | %b | %b", 
+        $monitor("%3t | %h | %h | %h | %h | %h | %h | %h | %b | %h", 
                  $time, 
                  cpu.fetch_stage.pc, 
                  cpu.if_id_register.instruction_out, 

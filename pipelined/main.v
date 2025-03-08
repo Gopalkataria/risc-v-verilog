@@ -342,18 +342,26 @@ module register_file(
 endmodule
 
 module instruction_memory(
-    input [63:0] pc,                    
-    output [31:0] instruction           
+    input [63:0] pc,                    // Program counter (address)
+    output [31:0] instruction           // Output instruction
 );
-    reg [31:0] mem [0:1023];           
+    reg [31:0] mem [0:1023];           // 1KB memory (1024 x 32-bit instructions)
 
-    
+    // Initialize instruction memory with a simple program
     initial begin
-        $readmemh("program.hex", mem); 
+        // Program: Add two numbers, store result, and branch
+        mem[0] = 32'h00500093; // addi x1, x0, 5   (x1 = 5)
+        mem[1] = 32'h00A00113; // addi x2, x0, 10  (x2 = 10)
+        mem[2] = 32'h002081B3; // add x3, x1, x2   (x3 = x1 + x2)
+        mem[3] = 32'h0041A233; // sw x4, 0(x3)     (Store x4 at address x3)
+        mem[4] = 32'h00208463; // beq x1, x2, 8    (Branch if x1 == x2)
+        mem[5] = 32'h004000EF; // jal x1, 16       (Jump and link to address 16)
+        mem[6] = 32'h00008067; // jalr x0, 0(x1)   (Jump to address in x1)
+        mem[7] = 32'h00000013; // nop              (No operation)
     end
 
-    
-    assign instruction = mem[pc[9:0]]; 
+    // Output the instruction at the address specified by the PC
+    assign instruction = mem[pc[9:0]]; // Use lower 10 bits of PC for 1KB memory
 endmodule
 
 
@@ -400,7 +408,7 @@ module fetch(
     input [63:0] branch_target,         
     input branch_taken,                 
     output reg [63:0] pc,               
-    output reg [31:0] instruction,      
+    output wire [31:0] instruction,      
     output reg instruction_valid        
 );
     
@@ -661,7 +669,7 @@ module execute(
     input [4:0] rd_addr,                // Destination register address
     input [2:0] funct3,                 // Function code 3 (for ALU and memory operations)
     input [6:0] funct7,                 // Function code 7 (for ALU operations)
-    output reg [63:0] alu_result,       // ALU result
+    output wire  [63:0] alu_result,       // ALU result
     output reg [63:0] mem_address,      // Memory address for load/store
     output reg [63:0] mem_write_data,   // Data to write to memory
     output reg branch_taken,            // Branch taken signal
@@ -670,6 +678,7 @@ module execute(
     output reg [4:0] rd_addr_out        // Destination register address (passed to MEM stage)
 );
     // Instantiate the ALU
+
     alu_64bit alu(
         .funct3(funct3),
         .funct7(funct7),
@@ -735,6 +744,10 @@ module ex_mem_register(
     input branch_taken_in,              // Branch taken signal from Execute stage
     input [63:0] jump_target_in,        // Jump target address from Execute stage
     input reg_write_in,                 // Register write signal from Execute stage
+     input [2:0] funct3_in,             // Function code 3 from Execute stage
+    input [6:0] funct7_in,              // Function code 7 from Execute stage
+    output reg [2:0 ] funct3_out,       // Function code 3 to Memory stage
+    output reg [6:0] funct7_out,        // Function code 7 to Memory stage
     input [4:0] rd_addr_in,             // Destination register address from Execute stage
     output reg [63:0] alu_result_out,   // ALU result to Memory stage
     output reg [63:0] mem_address_out,  // Memory address to Memory stage
@@ -804,7 +817,7 @@ module memory(
     input reg_write,                    // Register write signal from EX/MEM register
     input [4:0] rd_addr,                // Destination register address from EX/MEM register
     input [2:0] funct3,                 // Function code 3 (for memory operations)
-    output reg [63:0] mem_read_data,    // Data read from memory
+    output wire [63:0] mem_read_data,    // Data read from memory
     output reg [63:0] mem_result,       // Result to pass to WB stage (ALU result or memory read data)
     output reg reg_write_out,           // Register write signal (passed to WB stage)
     output reg [4:0] rd_addr_out        // Destination register address (passed to WB stage)
@@ -900,7 +913,6 @@ endmodule
 ///////////////////////////////////////////////
 
 
-
 module hazard_detection_unit(
     input [4:0] id_ex_rs1_addr,        // Source register 1 address from ID/EX register
     input [4:0] id_ex_rs2_addr,        // Source register 2 address from ID/EX register
@@ -911,7 +923,7 @@ module hazard_detection_unit(
 );
     always @(*) begin
         // Stall if there is a data hazard (RAW hazard)
-        if ((id_ex_mem_read && ((id_ex_rs1_addr == ex_mem_rd_addr) || (id_ex_rs2_addr == ex_mem_rd_addr))) begin
+        if (id_ex_mem_read && ((id_ex_rs1_addr == ex_mem_rd_addr) || (id_ex_rs2_addr == ex_mem_rd_addr))) begin
             stall = 1'b1;
         end else begin
             stall = 1'b0;
@@ -919,27 +931,38 @@ module hazard_detection_unit(
     end
 endmodule
 
-
-
-
 module riscv_processor(
     input clk,                          // Clock signal
     input rst                           // Reset signal
 );
     // Pipeline registers
-    wire [63:0] if_id_pc, if_id_instruction;
+    wire [63:0] if_pc;  // Added separate PC for fetch output
+    wire [63:0] if_id_pc;
+    wire [31:0] if_instruction; // Added separate instruction for fetch output
+    wire [31:0] if_id_instruction;
+    wire if_instruction_valid; // Added separate valid signal for fetch output
     wire if_id_instruction_valid;
+    
     wire [63:0] id_ex_pc, id_ex_rs1_data, id_ex_rs2_data, id_ex_imm, id_ex_branch_target;
     wire id_ex_mem_read, id_ex_mem_write, id_ex_reg_write;
     wire [4:0] id_ex_rs1_addr, id_ex_rs2_addr, id_ex_rd_addr;
     wire [2:0] id_ex_funct3;
     wire [6:0] id_ex_funct7;
+    
     wire [63:0] ex_mem_alu_result, ex_mem_mem_address, ex_mem_mem_write_data, ex_mem_jump_target;
     wire ex_mem_branch_taken, ex_mem_reg_write;
     wire [4:0] ex_mem_rd_addr;
+    wire [2:0] ex_mem_funct3; // Added to pass funct3 through to memory stage
+    wire [6:0] ex_mem_funct7; // Added to pass funct3 through to memory stage
+    
     wire [63:0] mem_wb_mem_result;
     wire mem_wb_reg_write;
     wire [4:0] mem_wb_rd_addr;
+    
+    // Writeback outputs
+    wire [63:0] write_back_data;
+    wire [4:0] write_back_addr;
+    wire write_back_enable;
 
     // Control signals
     wire stall, flush;
@@ -963,9 +986,9 @@ module riscv_processor(
         .stall(stall),
         .branch_target(branch_target),
         .branch_taken(branch_taken),
-        .pc(if_id_pc),
-        .instruction(if_id_instruction),
-        .instruction_valid(if_id_instruction_valid)
+        .pc(if_pc),                      // Fixed: separate output signal
+        .instruction(if_instruction),    // Fixed: use 32-bit signal
+        .instruction_valid(if_instruction_valid) // Fixed: separate output signal
     );
 
     // Instantiate the IF/ID Pipeline Register
@@ -974,24 +997,24 @@ module riscv_processor(
         .rst(rst),
         .stall(stall),
         .flush(flush),
-        .pc_in(if_id_pc),
-        .instruction_in(if_id_instruction),
-        .instruction_valid_in(if_id_instruction_valid),
-        .pc_out(if_id_pc),
-        .instruction_out(if_id_instruction),
-        .instruction_valid_out(if_id_instruction_valid)
+        .pc_in(if_pc),                   // Fixed: use fetch output
+        .instruction_in(if_instruction), // Fixed: use fetch output
+        .instruction_valid_in(if_instruction_valid), // Fixed: use fetch output
+        .pc_out(if_id_pc),               // Fixed: separate output signal
+        .instruction_out(if_id_instruction), // Fixed: separate output signal
+        .instruction_valid_out(if_id_instruction_valid) // Fixed: separate output signal
     );
 
     // Instantiate the Decode stage
     decode decode_stage(
         .clk(clk),
         .rst(rst),
-        .instruction(if_id_instruction),
-        .pc(if_id_pc),
-        .instruction_valid(if_id_instruction_valid),
-        .reg_write_back(mem_wb_reg_write),
-        .write_back_addr(mem_wb_rd_addr),
-        .write_back_data(mem_wb_mem_result),
+        .instruction(if_id_instruction), // Fixed: use IF/ID output
+        .pc(if_id_pc),                   // Fixed: use IF/ID output
+        .instruction_valid(if_id_instruction_valid), // Fixed: use IF/ID output
+        .reg_write_back(write_back_enable), // Fixed: use writeback output
+        .write_back_addr(write_back_addr),  // Fixed: use writeback output
+        .write_back_data(write_back_data),  // Fixed: use writeback output
         .rs1_data(id_ex_rs1_data),
         .rs2_data(id_ex_rs2_data),
         .imm(id_ex_imm),
@@ -1007,7 +1030,7 @@ module riscv_processor(
     );
 
     // Instantiate the ID/EX Pipeline Register
-    id_ex_register id_ex_register(
+    id_ex_register id_ex_registerr(
         .clk(clk),
         .rst(rst),
         .stall(stall),
@@ -1066,6 +1089,9 @@ module riscv_processor(
         .rd_addr_out(ex_mem_rd_addr)
     );
 
+    // Pass funct3 from ID/EX to EX/MEM (added)
+    assign ex_mem_funct3 = id_ex_funct3;
+
     // Instantiate the EX/MEM Pipeline Register
     ex_mem_register ex_mem_register(
         .clk(clk),
@@ -1079,13 +1105,15 @@ module riscv_processor(
         .jump_target_in(ex_mem_jump_target),
         .reg_write_in(ex_mem_reg_write),
         .rd_addr_in(ex_mem_rd_addr),
+        .funct3_in(ex_mem_funct3),       // Added funct3 to EX/MEM
         .alu_result_out(ex_mem_alu_result),
         .mem_address_out(ex_mem_mem_address),
         .mem_write_data_out(ex_mem_mem_write_data),
         .branch_taken_out(ex_mem_branch_taken),
         .jump_target_out(ex_mem_jump_target),
         .reg_write_out(ex_mem_reg_write),
-        .rd_addr_out(ex_mem_rd_addr)
+        .rd_addr_out(ex_mem_rd_addr),
+        .funct3_out(ex_mem_funct3)       // Added funct3 output from EX/MEM
     );
 
     // Instantiate the Memory stage
@@ -1099,8 +1127,8 @@ module riscv_processor(
         .jump_target(ex_mem_jump_target),
         .reg_write(ex_mem_reg_write),
         .rd_addr(ex_mem_rd_addr),
-        .funct3(id_ex_funct3),
-        .mem_read_data(mem_wb_mem_result),
+        .funct3(ex_mem_funct3),           // Fixed: use ex_mem_funct3 instead
+        .mem_read_data(mem_wb_mem_result), // Temporary wire
         .mem_result(mem_wb_mem_result),
         .reg_write_out(mem_wb_reg_write),
         .rd_addr_out(mem_wb_rd_addr)
@@ -1125,9 +1153,9 @@ module riscv_processor(
         .mem_result(mem_wb_mem_result),
         .reg_write(mem_wb_reg_write),
         .rd_addr(mem_wb_rd_addr),
-        .write_back_data(write_back_data),
-        .write_back_addr(write_back_addr),
-        .reg_write_back(reg_write_back)
+        .write_back_data(write_back_data),    // Fixed: Output to decode stage
+        .write_back_addr(write_back_addr),    // Fixed: Output to decode stage
+        .reg_write_back(write_back_enable)    // Fixed: Output to decode stage
     );
 
     // Branch handling
