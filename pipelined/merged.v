@@ -303,88 +303,6 @@ module alu_64bit(
     end
 endmodule
 
-module ControlUnit (
-    input [6:0] opcode,
-    output reg RegWrite,
-    output reg MemRead,
-    output reg MemWrite,
-    output reg ALUSrc,
-    output reg Branch,
-    output reg MemtoReg,
-    output reg Jump,
-    output reg AUIPC
-);
-    always @(*) begin
-        
-        RegWrite = 1'b0;
-        MemRead = 1'b0;
-        MemWrite = 1'b0;
-        ALUSrc = 1'b0;
-        Branch = 1'b0;
-        MemtoReg = 1'b0;
-        Jump = 1'b0;
-        AUIPC = 1'b0;
-
-        case (opcode)
-            
-            7'b0110011: begin
-                RegWrite = 1'b1;
-            end
-
-            
-            7'b0010011: begin
-                RegWrite = 1'b1;
-                ALUSrc = 1'b1;  
-            end
-
-            
-            7'b0000011: begin
-                RegWrite = 1'b1;
-                ALUSrc = 1'b1;
-                MemRead = 1'b1;
-                MemtoReg = 1'b1; 
-            end
-
-            
-            7'b0100011: begin
-                ALUSrc = 1'b1;
-                MemWrite = 1'b1;
-            end
-
-            
-            7'b1100011: begin
-                Branch = 1'b1;
-            end
-
-            
-            7'b1101111: begin
-                Jump = 1'b1;
-                RegWrite = 1'b1;
-                ALUSrc = 1'b1;
-            end
-
-            
-            7'b1100111: begin
-                Jump = 1'b1;
-                RegWrite = 1'b1;
-                ALUSrc = 1'b1;
-            end
-
-            
-            7'b0110111: begin
-                RegWrite = 1'b1;
-                ALUSrc = 1'b1;
-            end
-
-            
-            7'b0010111: begin
-                AUIPC = 1'b1;
-                RegWrite = 1'b1;
-                ALUSrc = 1'b1;
-            end
-        endcase
-    end
-endmodule
 module DataMemory (
     input clk,
     input reset,
@@ -412,13 +330,14 @@ module DataMemory (
         if (!reset && MemWrite)
             data_mem[data_addr[13:2]] <= write_data;
     end
-endmodulemodule Decode(
+endmodule
+module Decode(
     input clk,
     input rst,
     input [31:0] instr,
-    input [4:0] reg_write_addr, 
-    input [31:0] reg_write_data, 
-    input RegWrite_WB, 
+    input [4:0] reg_write_addr,
+    input [31:0] reg_write_data,
+    input RegWrite_WB,
     output [31:0] read_data1,
     output [31:0] read_data2,
     output [31:0] imm,
@@ -435,15 +354,6 @@ endmodulemodule Decode(
     output [6:0] funct7
 );
 
-    
-    reg [31:0] registers [0:31];
-    integer i;
-    initial begin
-        for (i = 0; i < 32; i = i + 1)
-            registers[i] = 32'h0;
-    end
-
-    
     assign rs1 = instr[19:15];
     assign rs2 = instr[24:20];
     assign rd = instr[11:7];
@@ -451,8 +361,17 @@ endmodulemodule Decode(
     assign funct7 = instr[31:25];
 
     
-    assign read_data1 = (rs1 != 0) ? registers[rs1] : 32'h0;
-    assign read_data2 = (rs2 != 0) ? registers[rs2] : 32'h0;
+    RegisterFile reg_file (
+        .clk(clk),
+        .rst(rst),
+        .RegWrite(RegWrite_WB),
+        .rs1(rs1),
+        .rs2(rs2),
+        .rd(reg_write_addr),
+        .write_data(reg_write_data),
+        .read_data1(read_data1),
+        .read_data2(read_data2)
+    );
 
     
     ImmGen imm_gen(
@@ -461,31 +380,14 @@ endmodulemodule Decode(
     );
 
     
-    ControlUnit control_unit(
-        .opcode(instr[6:0]),
-        .RegWrite(), 
-        .MemRead(MemRead),
-        .MemWrite(MemWrite),
-        .ALUSrc(ALUSrc),
-        .Branch(Branch),
-        .MemtoReg(MemtoReg),
-        .Jump(Jump),
-        .AUIPC(AUIPC)
-    );
 
     
- always @(*) begin
-    case (instr[6:0])
-        7'b0110011: alu_ctrl = {instr[30], instr[14:12]};
-        7'b0010011: alu_ctrl = {1'b0, instr[14:12]};
-        default:    alu_ctrl = 4'b0000;
-    endcase
-end
-    
-    always @(posedge clk) begin
-        if (RegWrite_WB && reg_write_addr != 0) begin
-            registers[reg_write_addr] <= reg_write_data;
-        end
+    always @(*) begin
+        case (instr[6:0])
+            7'b0110011: alu_ctrl = {instr[30], instr[14:12]}; 
+            7'b0010011: alu_ctrl = {1'b0, instr[14:12]};      
+            default:    alu_ctrl = 4'b0000;
+        endcase
     end
 
 endmodule
@@ -517,7 +419,9 @@ module EX_MEM(
             mem_to_reg_out <= mem_to_reg_in;
         end
     end
-endmodulemodule Execute(
+endmodule
+
+module Execute(
     input [31:0] PC,
     input [31:0] read_data1,
     input [31:0] read_data2,
@@ -533,18 +437,18 @@ endmodulemodule Execute(
     output reg [31:0] branch_target
 );
 
-    // MUX for Forwarding A (Selecting ALU Operand 1)
+    
     reg [31:0] operand1;
     always @(*) begin
         case (forwardA)
-            2'b00: operand1 = read_data1;           // From ID/EX pipeline
-            2'b01: operand1 = reg_write_data_WB;   // From WB stage
-            2'b10: operand1 = alu_result_MEM;      // From MEM stage
+            2'b00: operand1 = read_data1;           
+            2'b01: operand1 = reg_write_data_WB;   
+            2'b10: operand1 = alu_result_MEM;      
             default: operand1 = read_data1;
         endcase
     end
     
-    // MUX for Forwarding B (Selecting ALU Operand 2)
+    
     reg [31:0] operand2;
     always @(*) begin
         case (forwardB)
@@ -555,31 +459,31 @@ endmodulemodule Execute(
         endcase
     end
 
-    wire [63:0] alu_result_wire;  // Full 64-bit result
+    wire [63:0] alu_result_wire;  
     
      alu_64bit alu_unit (
         .funct3(funct3),
         .funct7(funct7),
-        .a({{32{operand1[31]}}, operand1}),  // Sign-extend operand1
-        .b({{32{operand2[31]}}, operand2}),  // Sign-extend operand2
+        .a({{32{operand1[31]}}, operand1}),  
+        .b({{32{operand2[31]}}, operand2}),  
         .result(alu_result_wire)
     );
 
-    // Assign only the lower 32 bits to ALU_result
+    
     assign ALU_result = alu_result_wire[31:0];
     
-    // Branch Target Calculation
+    
     always @(*) begin
-        branch_target = PC + (imm << 1);  // PC-relative addressing
+        branch_target = PC + (imm << 1);  
     end
     
-    // Branch Decision
+    
     always @(*) begin
         case (funct3)
-            3'b000: branch_taken = (operand1 == operand2) && Branch;  // BEQ
-            3'b001: branch_taken = (operand1 != operand2) && Branch;  // BNE
-            3'b100: branch_taken = ($signed(operand1) < $signed(operand2)) && Branch; // BLT
-            3'b101: branch_taken = ($signed(operand1) >= $signed(operand2)) && Branch; // BGE
+            3'b000: branch_taken = (operand1 == operand2) && Branch;  
+            3'b001: branch_taken = (operand1 != operand2) && Branch;  
+            3'b100: branch_taken = ($signed(operand1) < $signed(operand2)) && Branch; 
+            3'b101: branch_taken = ($signed(operand1) >= $signed(operand2)) && Branch; 
             default: branch_taken = 1'b0;
         endcase
     end
@@ -588,20 +492,20 @@ endmodule
 module Fetch(
     input clk,
     input reset,
-    input PCWrite, // Controls whether PC updates or stalls
-    input [1:0] PCSrc, // Determines next PC source
-    input [31:0] branch_target, // Target for branching
-    input [31:0] alu_result, // ALU result for jump and branch calculations
-    input Instr_Flush, // Control signal to flush IF/ID register
-    input IF_ID_Write, // Control signal to allow IF/ID update
-    output reg [31:0] next_PC, // Next PC value
-    output reg [31:0] current_PC, // Current PC value
-    output [31:0] instr // Fetched instruction
+    input PCWrite, 
+    input [1:0] PCSrc, 
+    input [31:0] branch_target, 
+    input [31:0] alu_result, 
+    input Instr_Flush, 
+    input IF_ID_Write, 
+    output reg [31:0] next_PC, 
+    output reg [31:0] current_PC, 
+    output [31:0] instr 
 );
 
     wire [31:0] instr_mem_out;
     
-    // Use existing Instruction Memory module
+    
     InstructionMemory instr_mem(
         .instr_addr(current_PC),
         .instr(instr_mem_out)
@@ -612,29 +516,31 @@ module Fetch(
             current_PC <= 32'h0;
         end else if (PCWrite) begin
             case (PCSrc)
-                2'b00: next_PC = current_PC + 4; // Normal sequential execution
-                2'b01: next_PC = branch_target; // Branch target address
-                2'b10: next_PC = alu_result; // Jump target address
+                2'b00: next_PC = current_PC + 4; 
+                2'b01: next_PC = branch_target; 
+                2'b10: next_PC = alu_result; 
                 default: next_PC = current_PC + 4;
             endcase
             current_PC <= next_PC;
         end
     end
     
-    assign instr = Instr_Flush ? 32'h00000013 : instr_mem_out; // NOP if flushed
+    assign instr = Instr_Flush ? 32'h00000013 : instr_mem_out; 
 
-endmodulemodule ID_EX(
+endmodule
+
+module ID_EX(
     input clk,
     input reset,
-    input ID_EX_Flush, // Control signal for pipeline stall or flush
-    input [31:0] pc_in, // Program counter from Decode
-    input [31:0] instr_in, // Instruction
-    input [31:0] read_data1_in, // Register data 1 from Decode
-    input [31:0] read_data2_in, // Register data 2 from Decode
-    input [31:0] imm_in, // Immediate value from Decode
-    input [4:0] rs1_in, rs2_in, rd_in, // Register addresses
-    input [3:0] alu_ctrl_in, // ALU control signal from Decode
-    input mem_read_in, mem_write_in, reg_write_in, mem_to_reg_in, alu_src_in, branch_in, jump_in, auipc_in, // Control signals
+    input ID_EX_Flush, 
+    input [31:0] pc_in, 
+    input [31:0] instr_in, 
+    input [31:0] read_data1_in, 
+    input [31:0] read_data2_in, 
+    input [31:0] imm_in, 
+    input [4:0] rs1_in, rs2_in, rd_in, 
+    input [3:0] alu_ctrl_in, 
+    input mem_read_in, mem_write_in, reg_write_in, mem_to_reg_in, alu_src_in, branch_in, jump_in, auipc_in, 
     output reg [31:0] pc_out,
     output reg [31:0] instr_out,
     output reg [31:0] read_data1_out,
@@ -647,7 +553,7 @@ endmodulemodule ID_EX(
 
     always @(posedge clk or posedge reset) begin
         if (reset || ID_EX_Flush) begin
-            // Flush pipeline stage when necessary
+            
             pc_out <= 32'b0;
             instr_out <= 32'b0;
             read_data1_out <= 32'b0;
@@ -667,7 +573,7 @@ endmodulemodule ID_EX(
             auipc_out <= 0;
         end
         else begin
-            // Pass values from Decode stage to Execution stage
+            
             pc_out <= pc_in;
             instr_out <= instr_in;
             read_data1_out <= read_data1_in;
@@ -692,8 +598,8 @@ endmodule
 module IF_ID(
     input clk,
     input reset,
-    input IF_ID_Write,  // Control signal to stall pipeline
-    input Instr_Flush,  // Control signal to flush instruction
+    input IF_ID_Write,  
+    input Instr_Flush,  
     input [31:0] pc_in, instr_in,
     output reg [31:0] pc_out, instr_out
 );
@@ -705,7 +611,7 @@ module IF_ID(
         end 
         else if (Instr_Flush) begin
             pc_out <= 32'h0;
-            instr_out <= 32'h00000013; // NOP (ADDI x0, x0, 0)
+            instr_out <= 32'h00000013; 
         end
         else if (IF_ID_Write) begin
             pc_out <= pc_in;
@@ -784,6 +690,39 @@ module MEM_WB (
         end
     end
 endmodule
+module RegisterFile(
+    input clk,
+    input rst,
+    input RegWrite,
+    input [4:0] rs1, rs2, rd,
+    input [31:0] write_data,
+    output [31:0] read_data1,
+    output [31:0] read_data2
+);
+    reg [31:0] registers [0:31];
+
+    
+    integer i;
+    initial begin
+        for (i = 0; i < 32; i = i + 1)
+            registers[i] = 32'h0;
+    end
+
+    
+    assign read_data1 = (rs1 != 0) ? registers[rs1] : 32'h0;
+    assign read_data2 = (rs2 != 0) ? registers[rs2] : 32'h0;
+
+    
+    always @(posedge clk or posedge rst) begin
+        if (rst) begin
+            for (i = 0; i < 32; i = i + 1)
+                registers[i] <= 32'h0;
+        end
+        else if (RegWrite && rd != 0) begin
+            registers[rd] <= write_data;
+        end
+    end
+endmodule
 module WriteBack (
     input [31:0] ALU_result,
     input [31:0] mem_read_data,
@@ -791,7 +730,9 @@ module WriteBack (
     output [31:0] reg_write_data
 );
     assign reg_write_data = MemtoReg ? mem_read_data : ALU_result;
-endmodulemodule RISC_V_Pipelined_CPU (
+endmodule
+
+module RISC_V_Pipelined_CPU (
     input clk,
     input reset
 );
@@ -1105,61 +1046,59 @@ module RISC_V_Pipelined_CPU_TB;
     reg clk;
     reg reset;
     
-    // Instantiate CPU
+    
     RISC_V_Pipelined_CPU cpu (
         .clk(clk),
         .reset(reset)
     );
     
-    // GTKWave Dump
+    
     initial begin
         $dumpfile("waveform.vcd");
         $dumpvars(0, RISC_V_Pipelined_CPU_TB);
     end
     
-    // Clock Generation (10ns period)
+    
     initial begin
         clk = 0;
         forever #5 clk = ~clk;
     end
     
-    // Instruction Memory Initialization
+    
     initial begin
         reset = 1;
-        #10 reset = 0;  // Deassert reset after 10 time units
+        #10 reset = 0;  
 
-        // Wait for reset to settle
+        
         #5;
         
         
-            cpu.fetch_stage.instr_mem.instr_mem[0] = 32'h00500093; // addi x1, x0, 5
-            cpu.fetch_stage.instr_mem.instr_mem[1] = 32'h00A00113; // addi x2, x0, 10
-            cpu.fetch_stage.instr_mem.instr_mem[2] = 32'h002081B3; // add x3, x1, x2
-            cpu.fetch_stage.instr_mem.instr_mem[3] = 32'h0041A233; // sw x4, 0(x3)
-            cpu.fetch_stage.instr_mem.instr_mem[4] = 32'h00208463; // beq x1, x2, label
-            cpu.fetch_stage.instr_mem.instr_mem[6] = 32'h004000EF; // jal x1, label
-            cpu.fetch_stage.instr_mem.instr_mem[7] = 32'h00008067; // ret
-            cpu.fetch_stage.instr_mem.instr_mem[5] = 32'h00100073; // ecall
-        
+            cpu.fetch_stage.instr_mem.instr_mem[0] = 32'h00500093; 
+            cpu.fetch_stage.instr_mem.instr_mem[1] = 32'h00A00113; 
+            cpu.fetch_stage.instr_mem.instr_mem[2] = 32'h002081B3; 
+            cpu.fetch_stage.instr_mem.instr_mem[3] = 32'h0041A233; 
+            cpu.fetch_stage.instr_mem.instr_mem[4] = 32'h00208463; 
+            cpu.fetch_stage.instr_mem.instr_mem[6] = 32'h004000EF; 
+            cpu.fetch_stage.instr_mem.instr_mem[7] = 32'h00008067; 
     end
 
-    // Termination
+    
     initial begin
         #200;
         $finish;
     end
 
-    // Monitoring key signals
+    
     initial begin
         $display("Time| PC       | Instr    | ALUResult| Reg1     | Reg2     | Reg3     | Reg4     | Reg4     |Branch     | Jump");
 
         $monitor("%3t | %h | %h | %h | %h | %h | %h | %h | %h | %b \t| %b", 
                  $time, cpu.PC_Out, cpu.Instr, cpu.ALUResult, 
-                 cpu.decode_stage.registers[1], 
-                 cpu.decode_stage.registers[2], 
-                 cpu.decode_stage.registers[3], 
-                    cpu.decode_stage.registers[4],
-                    cpu.decode_stage.registers[5],
+                 cpu.decode_stage.reg_file.registers[1], 
+                 cpu.decode_stage.reg_file.registers[2], 
+                 cpu.decode_stage.reg_file.registers[3], 
+                    cpu.decode_stage.reg_file.registers[4],
+                    cpu.decode_stage.reg_file.registers[5],
                  cpu.BranchTaken, cpu.Jump);
     end
 
