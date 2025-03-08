@@ -1,4 +1,6 @@
-module RISC_V_Pipelined_CPU_TB;
+`timescale 1ns / 1ps
+
+module RISC_V_CPU_Test;
     reg clk;
     reg reset;
     
@@ -10,93 +12,137 @@ module RISC_V_Pipelined_CPU_TB;
     
     // GTKWave Dump
     initial begin
-        $dumpfile("waveform.vcd");
-        $dumpvars(0, RISC_V_Pipelined_CPU_TB);
+        $dumpfile("risc_v_test.vcd");
+        $dumpvars(0, RISC_V_CPU_Test);
     end
     
-    // Clock Generation (10ns period)
+    // Clock Generation (2ns period)
     initial begin
         clk = 0;
         forever #1 clk = ~clk;
     end
     
-    // Reset and Initialization
-        integer i;
+    // Reset and Test Program Initialization
+    integer i;
     initial begin
+        // Apply reset
+        reset = 1;
+        #10 reset = 0;
+        
         // Initialize memory with all zeros first
         for (i = 0; i < 1024; i = i + 1) begin
             cpu.fetch_stage.imem.mem[i] = 32'h00000000;
         end
         
-        // Apply reset
-        reset = 1;
-        #10 reset = 0; // Deassert reset after 10 time units
-      // Writing instructions to memory
-cpu.fetch_stage.imem.mem[0] = 32'h00500093; // addi x1, x0, 5 (x1 = 5)
-cpu.fetch_stage.imem.mem[1] = 32'h00A00113; // addi x2, x0, 10 (x2 = 10)
-
-// Padding with 5 NOPs
-cpu.fetch_stage.imem.mem[2] = 32'h00000013; // nop
-cpu.fetch_stage.imem.mem[3] = 32'h00000013; // nop
-cpu.fetch_stage.imem.mem[4] = 32'h00000013; // nop
-cpu.fetch_stage.imem.mem[5] = 32'h00000013; // nop
-cpu.fetch_stage.imem.mem[6] = 32'h00000013; // nop
-
-cpu.fetch_stage.imem.mem[7] = 32'h002081B3; // add x3, x1, x2 (x3 = x1 + x2 = 15)
-cpu.fetch_stage.imem.mem[8] = 32'h40208233; // sub x4, x1, x2 (x4 = x1 - x2 = -5)
-
-// Padding with 5 NOPs
-cpu.fetch_stage.imem.mem[9] = 32'h00000013; // nop
-cpu.fetch_stage.imem.mem[10] = 32'h00000013; // nop
-cpu.fetch_stage.imem.mem[11] = 32'h00000013; // nop
-cpu.fetch_stage.imem.mem[12] = 32'h00000013; // nop
-cpu.fetch_stage.imem.mem[13] = 32'h00000013; // nop
-
-cpu.fetch_stage.imem.mem[14] = 32'h0020F2B3; // and x5, x1, x2 (x5 = x1 & x2 = 0)
-cpu.fetch_stage.imem.mem[15] = 32'h0020E333; // or x6, x1, x2 (x6 = x1 | x2 = 15)
-
-// Padding with 5 NOPs
-cpu.fetch_stage.imem.mem[16] = 32'h00000013; // nop
-cpu.fetch_stage.imem.mem[17] = 32'h00000013; // nop
-cpu.fetch_stage.imem.mem[18] = 32'h00000013; // nop
-cpu.fetch_stage.imem.mem[19] = 32'h00000013; // nop
-cpu.fetch_stage.imem.mem[20] = 32'h00000013; // nop
-
-cpu.fetch_stage.imem.mem[21] = 32'h0020C3B3; // xor x7, x1, x2 (x7 = x1 ^ x2 = 15)
-cpu.fetch_stage.imem.mem[22] = 32'h00109433; // sll x8, x1, x1 (x8 = x1 << x1 = 160)
-
-// Padding with 5 NOPs
-cpu.fetch_stage.imem.mem[23] = 32'h00000013; // nop
-cpu.fetch_stage.imem.mem[24] = 32'h00000013; // nop
-cpu.fetch_stage.imem.mem[25] = 32'h00000013; // nop
-cpu.fetch_stage.imem.mem[26] = 32'h00000013; // nop
-cpu.fetch_stage.imem.mem[27] = 32'h00000013; // nop
-
-cpu.fetch_stage.imem.mem[28] = 32'h0020D4B3; // srl x9, x1, x2 (x9 = x1 >> x2 = 0)
-cpu.fetch_stage.imem.mem[29] = 32'h4020D533; // sra x10, x1, x2 (x10 = x1 >>> x2 = 0)
-
-
-    end 
+        // Load test program
+        // Program to test ALU, Branch, and Jump operations
+        
+        // 1. Basic ALU operations
+        cpu.fetch_stage.imem.mem[0] = 32'h00100093;  // addi x1, x0, 1    # x1 = 1
+        cpu.fetch_stage.imem.mem[1] = 32'h00300113;  // addi x2, x0, 3    # x2 = 3
+        cpu.fetch_stage.imem.mem[2] = 32'h002081b3;  // add  x3, x1, x2   # x3 = x1 + x2 = 4
+        cpu.fetch_stage.imem.mem[3] = 32'h40208233;  // sub  x4, x1, x2   # x4 = x1 - x2 = -2
+        cpu.fetch_stage.imem.mem[4] = 32'h0020f2b3;  // and  x5, x1, x2   # x5 = x1 & x2 = 1
+        cpu.fetch_stage.imem.mem[5] = 32'h0020e333;  // or   x6, x1, x2   # x6 = x1 | x2 = 3
+        cpu.fetch_stage.imem.mem[6] = 32'h0020c3b3;  // xor  x7, x1, x2   # x7 = x1 ^ x2 = 2
+        cpu.fetch_stage.imem.mem[7] = 32'h00209433;  // sll  x8, x1, x2   # x8 = x1 << x2 = 8
+        cpu.fetch_stage.imem.mem[8] = 32'h0020d4b3;  // srl  x9, x1, x2   # x9 = x1 >> x2 = 0
+        
+        // 2. Immediate operations
+        cpu.fetch_stage.imem.mem[9] = 32'h00a00513;  // addi x10, x0, 10   # x10 = 10
+        cpu.fetch_stage.imem.mem[10] = 32'hfff00593; // addi x11, x0, -1   # x11 = -1
+        
+        // 3. Branch operations - test all branch types
+        cpu.fetch_stage.imem.mem[11] = 32'h00c00613; // addi x12, x0, 12   # x12 = 12
+        cpu.fetch_stage.imem.mem[12] = 32'h00c00693; // addi x13, x0, 12   # x13 = 12
+        cpu.fetch_stage.imem.mem[13] = 32'h00d60663; // beq  x12, x13, 12  # Branch taken to PC+12
+        cpu.fetch_stage.imem.mem[14] = 32'h00000013; // addi x0, x0, 0     # NOP (should be skipped)
+        cpu.fetch_stage.imem.mem[15] = 32'h00000013; // addi x0, x0, 0     # NOP (should be skipped)
+        cpu.fetch_stage.imem.mem[16] = 32'h00500713; // addi x14, x0, 5    # x14 = 5 (after branch)
+        
+        // 4. Jump operations - test JAL and JALR
+        cpu.fetch_stage.imem.mem[17] = 32'h008000ef; // jal  x1, 8        # Jump to PC+8, x1 = PC+4
+        cpu.fetch_stage.imem.mem[18] = 32'h00000013; // addi x0, x0, 0    # NOP (should be skipped)
+        cpu.fetch_stage.imem.mem[19] = 32'h00000793; // addi x15, x0, 0   # x15 = 0 (after jump)
+        cpu.fetch_stage.imem.mem[20] = 32'h00000813; // addi x16, x0, 0   # x16 = 0
+        cpu.fetch_stage.imem.mem[21] = 32'h01000893; // addi x17, x0, 16  # x17 = 16
+        cpu.fetch_stage.imem.mem[22] = 32'h000880e7; // jalr x1, x17, 0   # Jump to x17, x1 = PC+4
+        
+        // 5. Load/Store operations
+        cpu.fetch_stage.imem.mem[23] = 32'h00100913; // addi x18, x0, 1   # x18 = 1
+        cpu.fetch_stage.imem.mem[24] = 32'h01252023; // sw   x18, 0(x10)  # Store x18 to mem[x10]
+        cpu.fetch_stage.imem.mem[25] = 32'h00052983; // lw   x19, 0(x10)  # Load from mem[x10] to x19
+        
+        // End with an infinite loop
+        cpu.fetch_stage.imem.mem[26] = 32'h0000006f; // jal  x0, 0        # Infinite loop
+    end
     
     // Termination
     initial begin
-        #50;
+        #500;
+        $display("Test completed");
         $finish;
     end
     
     // Monitoring key signals
     initial begin
-        $display("Time | PC       | Instr    | ALUResult        | Reg1           | Reg2           | Reg3           | Reg4           | Branch | Jump");
-        $monitor("%3t | %h | %h | %h | %h | %h | %h | %h | %b | %h",
+        $display("Time | PC | Instruction | ALUResult | Branch | Jump | Registers");
+        $display("----------------------------------------------------------------");
+        $monitor("%4d | %h | %h | %h | %b | %h | x1=%h x2=%h x3=%h x4=%h x5=%h x6=%h x7=%h",
             $time,
             cpu.fetch_stage.pc,
             cpu.if_id_register.instruction_out,
             cpu.execute_stage.alu_result,
+            cpu.execute_stage.branch_taken,
+            cpu.execute_stage.jump_target,
             cpu.decode_stage.reg_file.registers[1],
             cpu.decode_stage.reg_file.registers[2],
             cpu.decode_stage.reg_file.registers[3],
             cpu.decode_stage.reg_file.registers[4],
-            cpu.execute_stage.branch_taken,
-            cpu.execute_stage.jump_target);
+            cpu.decode_stage.reg_file.registers[5],
+            cpu.decode_stage.reg_file.registers[6],
+            cpu.decode_stage.reg_file.registers[7]
+        );
+    end
+    
+    // Additional monitoring for key events
+    always @(posedge clk) begin
+        // Monitor branch instructions
+        if (cpu.execute_stage.branch_taken) begin
+            $display("BRANCH TAKEN at time %4d: PC=%h, Target=%h", 
+                $time, 
+                cpu.fetch_stage.pc, 
+                cpu.execute_stage.jump_target
+            );
+        end
+        
+        // Monitor jump instructions
+        if (cpu.decode_stage.jump && !cpu.execute_stage.branch) begin
+            $display("JUMP DETECTED at time %4d: PC=%h, Target=%h", 
+                $time, 
+                cpu.fetch_stage.pc, 
+                cpu.execute_stage.jump_target
+            );
+        end
+        
+        // Monitor ALU operations (R-type instructions)
+        if (cpu.if_id_register.instruction_out[6:0] == 7'b0110011) begin
+            $display("ALU R-TYPE at time %4d: funct3=%b, funct7=%b, Result=%h", 
+                $time, 
+                cpu.decode_stage.funct3,
+                cpu.decode_stage.funct7,
+                cpu.execute_stage.alu_result
+            );
+        end
+        
+        // Monitor ALU immediate operations (I-type instructions)
+        if (cpu.if_id_register.instruction_out[6:0] == 7'b0010011) begin
+            $display("ALU I-TYPE at time %4d: funct3=%b, imm=%h, Result=%h", 
+                $time, 
+                cpu.decode_stage.funct3,
+                cpu.decode_stage.imm[11:0],
+                cpu.execute_stage.alu_result
+            );
+        end
     end
 endmodule
