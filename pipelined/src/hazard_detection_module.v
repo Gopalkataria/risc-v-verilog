@@ -22,14 +22,13 @@ module hazard_detection_unit(
         end
 
         // RAW Hazard: Stall if an instruction depends on the result of a previous
-        // instruction in the EX/MEM or MEM/WB stage.
-        else if ((ex_mem_reg_write && 
+        // instruction in the EX/MEM stage.
+        else if (ex_mem_reg_write && 
                  ((id_ex_rs1_addr == ex_mem_rd_addr) || (id_ex_rs2_addr == ex_mem_rd_addr)) &&
-                 (ex_mem_rd_addr != 5'b00000)) ||
-                (mem_wb_reg_write && 
-                 ((id_ex_rs1_addr == mem_wb_rd_addr) || (id_ex_rs2_addr == mem_wb_rd_addr)) &&
-                 (mem_wb_rd_addr != 5'b00000))) begin
+                 (ex_mem_rd_addr != 5'b00000)) begin
             stall = 1'b1;
         end
+
+        // No need to check for RAW hazard with MEM/WB stage because the value is already available.
     end
 endmodule
