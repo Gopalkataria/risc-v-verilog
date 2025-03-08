@@ -46,39 +46,45 @@ module RISC_V_CPU_Test;
         // 4. addi x3, x3, 3 (I-type)
         cpu.fetch_stage.imem.mem[3] = 32'b0000000_00011_00011_000_00011_0010011; // addi x3, x3, 3
 
+        // 5. nop
+        cpu.fetch_stage.imem.mem[4] = 32'b0000000_00000_00000_000_00000_0010011; // nop (addi x0, x0, 0)
+
+        // 6. nop 
+        cpu.fetch_stage.imem.mem[5] = 32'b0000000_00000_00000_000_00000_0010011; // nop (addi x0, x0, 0)
+
         // 6. sub x5, x1, x2 (R-type)
-        cpu.fetch_stage.imem.mem[4] = 32'b0100000_00010_00001_000_00101_0110011; // sub x5, x1, x2
+        cpu.fetch_stage.imem.mem[6] = 32'b0100000_00010_00001_000_00101_0110011; // sub x5, x1, x2
 
         // 7. and x6, x1, x2 (R-type)
-        cpu.fetch_stage.imem.mem[5] = 32'b0000000_00010_00001_111_00110_0110011; // and x6, x1, x2
+        cpu.fetch_stage.imem.mem[7] = 32'b0000000_00010_00001_111_00110_0110011; // and x6, x1, x2
 
         // 5. add x4, x1, x2 (R-type)
-        cpu.fetch_stage.imem.mem[6] = 32'b0000000_00010_00001_000_00100_0110011; // add x4, x1, x2
+        cpu.fetch_stage.imem.mem[8] = 32'b0000000_00010_00001_000_00100_0110011; // add x4, x1, x2
 
 
         // 8. or x7, x1, x2 (R-type)
-        cpu.fetch_stage.imem.mem[7] = 32'b0000000_00010_00001_110_00111_0110011; // or x7, x1, x2
+        cpu.fetch_stage.imem.mem[9] = 32'b0000000_00010_00001_110_00111_0110011; // or x7, x1, x2
 
         // 9. xor x8, x1, x2 (R-type)
-        cpu.fetch_stage.imem.mem[8] = 32'b0000000_00010_00001_100_01000_0110011; // xor x8, x1, x2
+        cpu.fetch_stage.imem.mem[10] = 32'b0000000_00010_00001_100_01000_0110011; // xor x8, x1, x2
 
         // 10. sll x9, x1, x2 (R-type)
-        cpu.fetch_stage.imem.mem[9] = 32'b0000000_00010_00001_001_01001_0110011; // sll x9, x1, x2
+        cpu.fetch_stage.imem.mem[11] = 32'b0000000_00010_00001_001_01001_0110011; // sll x9, x1, x2
 
         // 11. srl x10, x1, x2 (R-type)
-        cpu.fetch_stage.imem.mem[10] = 32'b0000000_00010_00001_101_01010_0110011; // srl x10, x1, x2
+        cpu.fetch_stage.imem.mem[12] = 32'b0000000_00010_00101_101_01010_0110011; // srl x10, x5, x2
 
         // 12. sra x11, x1, x2 (R-type)
-        cpu.fetch_stage.imem.mem[11] = 32'b0100000_00010_00001_101_01011_0110011; // sra x11, x1, x2
+        cpu.fetch_stage.imem.mem[13] = 32'b0100000_00010_00101_101_01011_0110011; // sra x11, x5, x2
 
         // 13. slt x12, x1, x2 (R-type)
-        cpu.fetch_stage.imem.mem[12] = 32'b0000000_00010_00001_010_01100_0110011; // slt x12, x1, x2
+        cpu.fetch_stage.imem.mem[14] = 32'b0000000_00010_00001_010_01100_0110011; // slt x12, x1, x2
 
         // 14. sltu x13, x1, x2 (R-type)
-        cpu.fetch_stage.imem.mem[13] = 32'b0000000_00010_00001_011_01101_0110011; // sltu x13, x1, x2
+        cpu.fetch_stage.imem.mem[15] = 32'b0000000_00010_00001_011_01101_0110011; // sltu x13, x1, x2
 
         // 15. jal x0, 0 (infinite loop)
-        cpu.fetch_stage.imem.mem[14] = 32'b0000000_00000_00000_000_00000_1101111; // jal x0, 0 (infinite loop)
+        cpu.fetch_stage.imem.mem[16] = 32'b0000000_00000_00000_000_00000_1101111; // jal x0, 0 (infinite loop)
     end
     
     // Termination
