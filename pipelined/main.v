@@ -347,8 +347,12 @@ module instruction_memory(
 );
     reg [31:0] mem [0:1023];           // 1KB memory (1024 x 32-bit instructions)
 
-    // Initialize instruction memory with a simple program
+     integer i;
     initial begin
+        for (i = 0; i < 1024; i = i + 1) begin
+            mem[i] = 32'h00000000;
+        end
+
         // Program: Add two numbers, store result, and branch
         mem[0] = 32'h00500093; // addi x1, x0, 5   (x1 = 5)
         mem[1] = 32'h00A00113; // addi x2, x0, 10  (x2 = 10)
@@ -358,10 +362,14 @@ module instruction_memory(
         mem[5] = 32'h004000EF; // jal x1, 16       (Jump and link to address 16)
         mem[6] = 32'h00008067; // jalr x0, 0(x1)   (Jump to address in x1)
         mem[7] = 32'h00000013; // nop              (No operation)
+
     end
 
+
     // Output the instruction at the address specified by the PC
-    assign instruction = mem[pc[9:0]]; // Use lower 10 bits of PC for 1KB memory
+    assign instruction = mem[pc[9:0]>>2]; // Use lower 10 bits of PC for 1KB memory
+
+    
 endmodule
 
 
@@ -687,29 +695,34 @@ module execute(
         .result(alu_result)
     );
 
-    // Handle branching and jumping
-    always @(*) begin
+    initial begin 
         branch_taken = 1'b0;
         jump_target = 64'b0;
-
-        // Branch instructions (B-type)
-        if (funct3 == 3'b000 && alu_result == 64'b0) branch_taken = 1'b1; // BEQ
-        else if (funct3 == 3'b001 && alu_result != 64'b0) branch_taken = 1'b1; // BNE
-        else if (funct3 == 3'b100 && $signed(alu_result) < 0) branch_taken = 1'b1; // BLT
-        else if (funct3 == 3'b101 && $signed(alu_result) >= 0) branch_taken = 1'b1; // BGE
-        else if (funct3 == 3'b110 && $unsigned(alu_result) < 0) branch_taken = 1'b1; // BLTU
-        else if (funct3 == 3'b111 && $unsigned(alu_result) >= 0) branch_taken = 1'b1; // BGEU
-
-        // Jump instructions (JAL, JALR)
-        if (funct3 == 3'b000 && funct7 == 7'b0000000) begin // JAL
-            jump_target = pc_in + imm;
-            branch_taken = 1'b1;
-        end else if (funct3 == 3'b000 && funct7 == 7'b0000001) begin // JALR
-            jump_target = rs1_data + imm;
-            branch_taken = 1'b1;
-        end
     end
 
+   always @(*) begin
+    branch_taken = 1'b0; // Default to not taken
+    jump_target = 64'b0; // Default to no jump
+
+    // Branch instructions (B-type)
+    case (funct3)
+        3'b000: branch_taken = (rs1_data == rs2_data); // BEQ
+        3'b001: branch_taken = (rs1_data != rs2_data); // BNE
+        3'b100: branch_taken = ($signed(rs1_data) < $signed(rs2_data)); // BLT
+        3'b101: branch_taken = ($signed(rs1_data) >= $signed(rs2_data)); // BGE
+        3'b110: branch_taken = (rs1_data < rs2_data); // BLTU
+        3'b111: branch_taken = (rs1_data >= rs2_data); // BGEU
+    endcase
+
+    // Jump instructions (JAL, JALR)
+    if (funct3 == 3'b000 && funct7 == 7'b0000000) begin // JAL
+        jump_target = pc_in + imm;
+        branch_taken = 1'b1;
+    end else if (funct3 == 3'b000 && funct7 == 7'b0000001) begin // JALR
+        jump_target = rs1_data + imm;
+        branch_taken = 1'b1;
+    end
+end
     // Handle memory address calculation and data preparation
     always @(*) begin
         mem_address = rs1_data + imm; // Base address + offset
@@ -921,6 +934,11 @@ module hazard_detection_unit(
     input id_ex_mem_read,              // Memory read signal from ID/EX register
     output reg stall                   // Stall signal
 );
+
+    initial begin 
+        stall = 1'b0;
+    end
+
     always @(*) begin
         // Stall if there is a data hazard (RAW hazard)
         if (id_ex_mem_read && ((id_ex_rs1_addr == ex_mem_rd_addr) || (id_ex_rs2_addr == ex_mem_rd_addr))) begin
@@ -930,6 +948,25 @@ module hazard_detection_unit(
         end
     end
 endmodule
+
+
+
+
+
+
+
+
+
+
+/////////////////////////////// main impelmentation /////////////////////////////////
+
+
+
+
+
+
+
+
 
 module riscv_processor(
     input clk,                          // Clock signal
@@ -968,6 +1005,66 @@ module riscv_processor(
     wire stall, flush;
     wire [63:0] branch_target;
     wire branch_taken;
+
+        // Create separate wire declarations for branch signals at module top level
+    wire execute_branch_taken;       // Branch taken signal from execute stage
+    wire [63:0] execute_branch_target; // Branch target from execute stage
+    wire [63:0] ex_mem_branch_target;  // Branch target from EX/MEM register
+
+    // Update the execute stage instance to use these new signals
+    execute execute_stage(
+        .clk(clk),
+        .rst(rst),
+        .pc_in(id_ex_pc),
+        .rs1_data(id_ex_rs1_data),
+        .rs2_data(id_ex_rs2_data),
+        .imm(id_ex_imm),
+        .branch_target(id_ex_branch_target),
+        .mem_read(id_ex_mem_read),
+        .mem_write(id_ex_mem_write),
+        .reg_write(id_ex_reg_write),
+        .rs1_addr(id_ex_rs1_addr),
+        .rs2_addr(id_ex_rs2_addr),
+        .rd_addr(id_ex_rd_addr),
+        .funct3(id_ex_funct3),
+        .funct7(id_ex_funct7),
+        .alu_result(ex_mem_alu_result),
+        .mem_address(ex_mem_mem_address),
+        .mem_write_data(ex_mem_mem_write_data),
+        .branch_taken(execute_branch_taken),      // Use the new signal
+        .jump_target(execute_branch_target),      // Use the new signal
+        .reg_write_out(ex_mem_reg_write),
+        .rd_addr_out(ex_mem_rd_addr)
+    );
+
+    // Update the EX/MEM register instance
+    ex_mem_register ex_mem_register(
+        .clk(clk),
+        .rst(rst),
+        .stall(stall),
+        .flush(flush),
+        .alu_result_in(ex_mem_alu_result),
+        .mem_address_in(ex_mem_mem_address),
+        .mem_write_data_in(ex_mem_mem_write_data),
+        .branch_taken_in(execute_branch_taken),   // Use the new signal
+        .jump_target_in(execute_branch_target),   // Use the new signal
+        .reg_write_in(ex_mem_reg_write),
+        .rd_addr_in(ex_mem_rd_addr),
+        .funct3_in(ex_mem_funct3),
+        .alu_result_out(ex_mem_alu_result),
+        .mem_address_out(ex_mem_mem_address),
+        .mem_write_data_out(ex_mem_mem_write_data),
+        .branch_taken_out(ex_mem_branch_taken),   // Use the new signal
+        .jump_target_out(ex_mem_branch_target),   // Use the new signal
+        .reg_write_out(ex_mem_reg_write),
+        .rd_addr_out(ex_mem_rd_addr),
+        .funct3_out(ex_mem_funct3)
+    );
+
+    // Then assign the branch control signals clearly
+    assign branch_taken = ex_mem_branch_taken;
+    assign branch_target = ex_mem_branch_target;
+    assign flush = branch_taken;
 
     // Instantiate the Hazard Detection Unit
     hazard_detection_unit hdu(
@@ -1063,58 +1160,10 @@ module riscv_processor(
         .funct7_out(id_ex_funct7)
     );
 
-    // Instantiate the Execute stage
-    execute execute_stage(
-        .clk(clk),
-        .rst(rst),
-        .pc_in(id_ex_pc),
-        .rs1_data(id_ex_rs1_data),
-        .rs2_data(id_ex_rs2_data),
-        .imm(id_ex_imm),
-        .branch_target(id_ex_branch_target),
-        .mem_read(id_ex_mem_read),
-        .mem_write(id_ex_mem_write),
-        .reg_write(id_ex_reg_write),
-        .rs1_addr(id_ex_rs1_addr),
-        .rs2_addr(id_ex_rs2_addr),
-        .rd_addr(id_ex_rd_addr),
-        .funct3(id_ex_funct3),
-        .funct7(id_ex_funct7),
-        .alu_result(ex_mem_alu_result),
-        .mem_address(ex_mem_mem_address),
-        .mem_write_data(ex_mem_mem_write_data),
-        .branch_taken(ex_mem_branch_taken),
-        .jump_target(ex_mem_jump_target),
-        .reg_write_out(ex_mem_reg_write),
-        .rd_addr_out(ex_mem_rd_addr)
-    );
-
+    
     // Pass funct3 from ID/EX to EX/MEM (added)
     assign ex_mem_funct3 = id_ex_funct3;
-
-    // Instantiate the EX/MEM Pipeline Register
-    ex_mem_register ex_mem_register(
-        .clk(clk),
-        .rst(rst),
-        .stall(stall),
-        .flush(flush),
-        .alu_result_in(ex_mem_alu_result),
-        .mem_address_in(ex_mem_mem_address),
-        .mem_write_data_in(ex_mem_mem_write_data),
-        .branch_taken_in(ex_mem_branch_taken),
-        .jump_target_in(ex_mem_jump_target),
-        .reg_write_in(ex_mem_reg_write),
-        .rd_addr_in(ex_mem_rd_addr),
-        .funct3_in(ex_mem_funct3),       // Added funct3 to EX/MEM
-        .alu_result_out(ex_mem_alu_result),
-        .mem_address_out(ex_mem_mem_address),
-        .mem_write_data_out(ex_mem_mem_write_data),
-        .branch_taken_out(ex_mem_branch_taken),
-        .jump_target_out(ex_mem_jump_target),
-        .reg_write_out(ex_mem_reg_write),
-        .rd_addr_out(ex_mem_rd_addr),
-        .funct3_out(ex_mem_funct3)       // Added funct3 output from EX/MEM
-    );
+    assign ex_mem_funct7 = id_ex_funct7;
 
     // Instantiate the Memory stage
     memory memory_stage(
@@ -1158,10 +1207,6 @@ module riscv_processor(
         .reg_write_back(write_back_enable)    // Fixed: Output to decode stage
     );
 
-    // Branch handling
-    assign branch_taken = ex_mem_branch_taken;
-    assign branch_target = ex_mem_jump_target;
-    assign flush = branch_taken; // Flush the pipeline if a branch is taken
 endmodule
 
 
