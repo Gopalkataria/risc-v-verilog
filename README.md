@@ -6,7 +6,8 @@
 
 P.S. not complete, jump statements not working, hazards not handled properly 
 
-contributors :
-Shaikh Haris Jamal 
-Devansh Vershaney 
-Gopal Kataria 
+### contributors 
+ 
+* Shaikh Haris Jamal 
+* Devansh Vershaney 
+* Gopal Kataria 
