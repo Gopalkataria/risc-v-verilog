@@ -3,6 +3,9 @@
 **Total Marks: 100**  
 **February 6, 2025**  
 
+
+P.S. not complete, jump statements not working, hazards not handled properly 
+
 ## 1 Overall Goal  
 Each group must develop a processor architecture design based on the RISC-V ISA using Verilog. The design should be thoroughly tested to satisfy all the specification requirements using simulations. The project submission must include the following:
 
